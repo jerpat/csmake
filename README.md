@@ -38,9 +38,9 @@ these tools don't yet support like - gasp - delivering a man page?  Good
 luck... Python developers have recapitulated the problem of tool
 specialization in spades.  All these various build/developer tools all solve
 specific problems and like make, ant, etc., and all have been pushed and
-stretched way beyond their sweet spots (e.g., using pip for production builds
-- this was never Mr. Bicking's purpose for pip).  When it comes to packaging,
-forget about it - every format has a very specific tool chain and an
+stretched way beyond their sweet spots (e.g., using pip for production
+builds - in my option this was never Mr. Bicking's purpose for pip).  When it comes to
+packaging, forget about it - every format has a very specific tool chain and an
 environment required for building - and cross platform or even distros - well,
 you're signing up for a lot of hardship and brain damage - not to mention
 reading, lots and lots of reading.
@@ -119,7 +119,7 @@ The next sections go into greater details on each of the points above.
 ## csmake Build Configurations - csmakefiles
 A csmakefile is simply a csmake build configuration in a python ini format
 that calls out the various modules that will be used to perform a build.  Each
-section (except for the [~~phases~~] section) is a reference to a module
+section (except for the [\~\~phases\~\~] section) is a reference to a module
 
 For example:
 ```
@@ -373,14 +373,14 @@ different aspects of the file:
 ```
     - group-id:
        a bucket that any file can be added to.  These buckets
-understand history, and will identify only the final results when only the
-bucket is called out (more on this below)
+       understand history, and will identify only the final results when only the
+       bucket is called out (more on this below)
     - file type:
        the literal type of the file - it is encouraged, but not
-required that this is the most specific mime type that describes the file
+       required that this is the most specific mime type that describes the file
     - intent:
        is a way to annotate what the intended purpose for the file is in
-the build
+       the build
 
 Each of these axes are useful in different parts of the build, depending on
 the purpose of a particular section and the whole build specification.
@@ -400,19 +400,19 @@ statements you can add to a step: **files, **yields-files, **maps
 
     - **files:
           a way to tell the build specification that files exist (i.e.,
-are source files) and what type they should be given
+          are source files) and what type they should be given
     - **yields-files:
           a way to tell the build specification that a section
-will produce (or clean, etc) files with the specified type
+          will produce (or clean, etc) files with the specified type
     - **maps:
           defines how a section will map files from one type or
-file pattern to another - mappings can be one of 1-1, *-1, 1-*, or *-*  and,
-as demonstrated, multiple mappings can be defined using the ever popular "and"
-operator (&&)
+          file pattern to another - mappings can be one of 1-1, *-1, 1-*, or *-*  and,
+          as demonstrated, multiple mappings can be defined using the ever popular "and"
+          operator (&&)
 
 To leave parts of the type out for the mappings, the proper separators need to
-be present as things are left out from the left part of the type, for example
-<my-group> would just be a group, which would only be the last results
+be present as things are left out from the left part of the type, for
+example \<my-group\> would just be a group, which would only be the last results
 available in the group (remember, groups maintain history).  <(text)> would
 denote any file designated as a "text" type file.  <(:man-page)> would denote
 (notice the colon to the left of "man-page") a specific purpose for the file
@@ -421,7 +421,7 @@ of what format or group the file is in).  <(text:man-page)> would denote a
 text file that has the purpose of being a man-page (maybe not the best
 choice...) from any group being tracked.
 
-(next parts to add)
+### (next parts to add)
     Examples
     Basic workflow/theory of operation
     Hitchhiker's guide to writing csmakefiles
