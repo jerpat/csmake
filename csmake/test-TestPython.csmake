@@ -1,0 +1,108 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+[~~phases~~]
+test=Run unit tests
+**default=test
+
+[environment@setup-test-TestPython]
+IGNORE=CsmakeModules/*, Csmake/*, *__init__*
+IGNORE_MULTILINE=
+    CsmakeModules/*
+    Csmake/*
+    *__init__*
+
+#---------------------------------------------------
+# Example failure scenarios
+#---------------------------------------------------
+#This is an example of failing unit tests
+[TestPython@fail-test-unittesting]
+test-dir=test-TestPython-source/tests
+test=test_failing_*.py
+source-dir=test-TestPython-source
+option-answer=3
+ignore-files=%(IGNORE)s
+
+#This is an example of unit testing that fails coverage
+[&CheckPythonCoverage@fail-coverage-unittesting]
+required-percentage=80
+[TestPython@fail-coverage-unittesting]
+test-dir=test-TestPython-source/tests
+test=test_bad_coverage_*.py
+source-dir=test-TestPython-source
+option-answer=5
+ignore-files=%(IGNORE)s
+
+#This is an exmaple of unit testing failing coverage on one class
+[&CheckPythonCoverage@fail-file-coverage-unittesting]
+required-percentage=82
+every-class=True
+[TestPython@fail-file-coverage-unittesting]
+test-dir=test-TestPython-source/tests
+test=test_good_*.py
+source-dir=test-TestPython-source
+option-answer=5
+ignore-files=%(IGNORE_MULTILINE)s
+
+#This is an example of unit testing that misses a file
+[&EnsureAllPythonTested@fail-sufficient-unittesting]
+[TestPython@fail-sufficient-unittesting]
+test-dir=test-TestPython-source/tests
+test=test_bad_coverage_*.py
+source-dir=test-TestPython-source
+option-answer=5
+ignore-files=%(IGNORE)s
+
+[command@show-failure]
+description=This demonstrates what failing unit tests look like
+0000=setup-test-TestPython
+0100=fail-test-unittesting
+
+[command@show-bad-coverage]
+description=This demonstrates what bad coverage failures look like
+0000=setup-test-TestPython
+0100=fail-coverage-unittesting
+
+[command@show-bad-file-coverage]
+description=This demonstrates what bad file coverage failures look like
+0000=setup-test-TestPython
+0100=fail-file-coverage-unittesting
+
+[command@show-insufficient]
+description=This demonstrates what missing a file for coverage looks like
+0000=setup-test-TestPython
+0100=fail-sufficient-unittesting
+
+#-----------------------------------------------------------
+# This is an example of good testing
+#-----------------------------------------------------------
+[&CheckPythonCoverage@unittesting]
+required-percentage=80
+every-class=True
+[&EnsureAllPythonTested@unittesting]
+[TestPython@unittesting]
+test-dir=test-TestPython-source/tests
+test=test_good_*.py
+source-dir=test-TestPython-source
+option-answer=5
+ignore-files=%(IGNORE)s
+
+#This is an example of unit testing that misses a file
+[command@]
+description=This does an end-to-end build - currently just testing
+0000=setup-test-TestPython
+0100=unittesting

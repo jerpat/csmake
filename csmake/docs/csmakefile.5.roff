@@ -1,0 +1,1680 @@
+.\"# <copyright>
+.\"# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+.\"#
+.\"# This program is free software: you can redistribute it and/or modify it
+.\"# under the terms of the GNU General Public License as published by the
+.\"# Free Software Foundation, either version 3 of the License, or (at your
+.\"# option) any later version.
+.\"#
+.\"# This program is distributed in the hope that it will be useful,
+.\"# but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\"# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+.\"# Public License for more details. 
+.\"#
+.\"# You should have received a copy of the GNU General Public License
+.\"# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+.\"# </copyright>
+
+.\" Process this file with
+.\" groff -man -Tascii csmakefile.5.roff
+.\"
+.TH csmakefile 5 "DECEMBER 2016" "HPE Helion" "User Manuals"
+.SH NAME
+csmakefile - A specification-file for building with csmake
+
+.SH SYNOPSIS
+.B csmake [Options] [Methods]
+
+.B csmake --makefile=csmakefile [Options] [Methods]
+
+.SH DESCRIPTION
+The
+.B csmakefile
+is the default file in the current working directory that specifies what
+csmake should do to carry out the command(s) and method(s) on a given
+invocation of csmake
+
+The csmakefile specifications (csmakefiles) are high-level descriptions
+of build processes apropos to the project.
+
+The specifications are case-sensitive python "ini" style files where each
+section specifies an action (type or module) and a set of inputs to that action
+(options).
+ E.g.:
+
+.EX
+    [<module>@<section-id>]
+    <key> = <value>
+    <key> = <value>
+    .
+    .
+    .
+.EE
+
+.P
+The csmake --list-types command will show all of the documentation for
+csmake modules in your environment (based on the current
+ --modules-path).  --list-type=<name> where <name> is a module that you
+want help for and get the documentation just for the single module.
+ --modules-path will augment where csmake looks for modules.
+
+.SH DECLARING PHASES
+
+In csmake, a "phase" is a full, atomic build process that runs the requested
+build specification all the way through.  I.e., "build" ought to build artefacts
+"clean" ought to clean artefacts, "push" ought to push artefacts to storage,
+etc.
+
+Every csmakefile can document and define the valid set of phases,
+sequences of phases, the default phase sequence to execute, and
+any suggested multicommand command line arguments through the
+use of the [~~phases~~] section declaration.  Detailed documentation
+for a [~~phases~~] section may be obtained using the --list-type flag with
+csmake:
+
+.HP 4
+csmake --list-type=~~phases~~
+
+.P
+The documentation for the ~~phases~~ section is also included below in this
+man page.
+
+NOTE: use of the '~~' (double-tilde) convention denotes a csmake internally
+defined identifier as opposed to something defined as a module or users.
+
+Use of the ~~phases~~ section is not required, but will allow csmake
+to respond better to the users of the given csmakefile when they
+request default behavior (i.e., just typing "csmake" to see what happens)
+   - the expected default behavior would usually be to execute a
+full build.
+
+Use of the ~~phases~~ section will also inform
+users of how to use the phases and sequences of phases to complete
+builds.  It will also help to inform users if they attempt to call out
+phases that are not defined or unanticipated for the build.
+
+To use the ~~phases~~ section, simply add '[~~phases~~]' to the csmakefile
+where the options for the section are either the names of the
+valid phases or the option leads with '**' and defines valid
+or anticipated behavior.  **default, **sequences, and **multicommands
+are the supported "behavior" options.
+
+.P
+.EX
+Section Type: ~~phases~~
+----Info----
+
+    This is an *informational* section in the csmakefile for csmake
+    This section may not be executed or referred to in the rest
+    of the build specification.
+    The declaration of this section in the csmakefile *does not*
+    have an id.  I.e., the section is *only*:  [~~phases~~]
+Purpose: Declare, document, and validate phases and multicommands.
+
+         csmake will use this special section to verify validity of
+         the phases and provide information about
+         phases that the end-user of the csmakefile may use
+         to build.
+
+         It also allows the makefile to declare valid combinations
+         of phases, what the default combination should be, and
+         what multicommand combinations are considered useful
+Options:
+    <phase> - Document and declare a phase
+    **sequences
+        Document what various combinations of phases accomplish
+        The format of **sequences is:
+            <phase> -> <phase> -> ... -> <phase>: <doc>
+    **default
+        Declare a default phase sequence.
+        When defined, the sequence will be executed instead of the
+        "default" phase when csmake is not given any phases on the command-line.
+        The format of **default is a sequence:
+            <phase> -> <phase> -> ... -> <phase>
+    **multicommands
+        Document what combinations of commands/sections do if
+        they are executed together.
+        (Multicommands are not validated against user input)
+        The format of multicommands is:
+            <command> (,|&) <command> ... <command>: <doc>
+    **requires
+        System packages required to build the contents of the csmakefile.
+        (requires is currently not validated)
+
+Example:
+    [~~phases~~]
+    build=build the thing
+    clean=clean the thing
+    xyzzy=do magic on the thing
+    test=test the thing
+    **sequences=
+        clean -> build -> xyzzy -> test -> clean: Full test build sequence
+        clean -> build: No magic phrase inserted to result
+    **default= clean -> build -> xyzzy
+    **requires=
+         csmake-providers
+         csmake-swak
+         n81
+.EE
+
+.SH STANDARD MODULES (a.k.a. Section Types)
+
+As mentioned, the documentation for modules that are accessable
+from csmake's current --modules-path can be accessed via:
+
+.HP 4
+csmake --list-types
+
+.P
+This will list the types of sections (modules) you can specify in a csmakefile.
+These types correspond to CsmakeModules found along the --modules-path
+which is why you will see modules and types used interchangably throughout
+the tool usage and documentation.
+
+.HP 4
+csmake --list-type MyModule
+
+.P
+If there is a csmake module named "MyModule" somewhere along the
+  --modules-path (which will likely include the current working directory)
+then the documentation for that module will be output.
+
+By convention, all lower case types should be reserved
+for use only as standard modules that are considered a core part of the
+csmake specification language and may have special treatment within
+the implementation of csmake.  E.g., "command" sections are listed via
+csmake --list-commands and are invoked via use of --command.   Another example
+would be, "metadata" which is tracked internal to csmake and made available
+to all module implementations.
+
+Care should be taken if a user decides to attempt to reimplement or change
+a core, all-lowercase, module since the implication is that some of the
+internals of csmake depend on or are otherwise exposed to or by these modules.
+
+Below is the full documentation of the core csmake module library.
+
+.EX
+___________________________________________________
+
+Section Type: CheckPythonCoverage
+----Info----
+Purpose: Fail testing if coverage does not pass the given threshold
+Type: Aspect   Library: csmake (core)
+JoinPoints/Phases:
+    passed__test - Will check the resulting threshold
+Options:
+    required-percentage - The coverage threshold required to pass
+    every-class - (OPTIONAL) When True every class tested must
+                             clear the given threshold
+                  Default: False
+Notes: Built for use with TestPython
+
+___________________________________________________
+
+Section Type: CompressManPage
+----Info----
+Purpose: Prepare a man page from source to delivery
+Type: Module   Library: csmake (core)
+Options: (none)
+Phases:
+    build - create a man page from specified source
+    clean - remove the results
+Mapping:
+    Expects a 1-1 mapping of things ready to be delivered as
+    man pages and will prep them by compressing them using gzip
+
+___________________________________________________
+
+Section Type: DebianPackage
+----Info----
+Purpose: To create a .deb package that can be consumed by dpkg.
+Implements: Packager
+Type: Module   Library: csmake (core)
+Phases:
+    package - Will build a debian package
+    clean, package_clean - will delete the package
+Options:
+    Common keywords:
+        package-version - the version for the package
+        maps - points to installmap based sections that
+               define how files should be mapped into the package
+        result - directory to put the results
+                 The package will be called
+                      <name>-<version>-<package-version>.deb
+        debian-directory-copyrignt= ID of a copyright section to use
+                                    as the copyright for the debian
+                                    information in the deb.
+        arch - (OPTIONAL) Specify the architecture
+                  amd64, i386 probably, or (default) all
+        priority - (OPTIONAL) In debian, priority can be:
+            required, important, standard, optional, extra
+            (defaults to extra)
+            http://www.debian.org/doc/debian-policy/ch-archive.html#s-prioritiesalue ))
+
+Joinpoints introduced:  See Packager module
+
+Flowcontrol Advice introduced:  See Packager module
+
+Install Map Definitions:  See Packager module
+
+___________________________________________________
+
+Section Type: EnsureAllPythonTested
+----Info----
+Purpose: Fail testing if a python file exists that is not tested.
+Type: Aspect   Library: csmake (core)
+Options:
+    filter - (OPTIONAL) specifies the filter for files to ensure
+                        are covered in the test.
+                        May use glob (unix-style) wildcards
+JoinPoints/Phases:
+    passed__test - Will check the resulting threshold
+Notes: For use with TestPython
+
+___________________________________________________
+
+Section Type: InjectVersion
+----Info----
+Purpose: Replace version strings with the current calculated version
+Type: Module   Library: csmake (core)
+Phases:
+    build, package - Will do the replacement in a build or package step
+    clean - Delete the versioned file only if it's not in-place
+Mapping: Expects a 1-1 mapping - may be in-place
+         WARNING: Original source files should not be in-place
+                  This module will modify files on the right side
+                  of the mapping.
+Options:
+    match - String to match and replace in files with the current version
+            Take care not to make this something that is easily matched
+            NOTE: csmake '%' environment substitutions
+                  will not be performed
+    version-marker - (OPTIONAL) String to use to separate the
+                                parts of the version
+                     DEFAULT: -
+
+___________________________________________________
+
+Section Type: Packager
+----Info----
+Purpose: Implements the packaging framework
+         This module will produce a "tarball" archive
+         Other kinds of packagers should subclass this
+         implementation.
+Type: Module   Library: csmake (core)
+Phases:
+    package - Will build the package
+    clean, package_clean - will delete the package
+Options:
+    format - bzip2 or gzip (OPTIONAL)
+             (specific packagers may define other formats)
+             Default will be gzip
+    package-version - the version for the package
+    maps - points to installmap based sections that
+           define how files should be mapped into the package
+    default_<path> - Define a default path for an install map path
+                     definition.  Other paths may be referred
+                     to using curly braces '{' '}', such as:
+                       {root}
+                     (for anything to make sense, paths must start
+                      with at least {root}, or something that makes
+                      sense to the Packager)
+                     It is important to realize that references
+                     are not the installmap definitions.
+                     For example, an install map might define:
+                        path_root=INSTALL_ROOT
+                     INSTALL_ROOT is specific to the *installmap*
+                     root from path_root is what Packagers understand.
+                     (See "Install Map Definitions" ::path:: below)
+           If a Packager doesn't have a built-in mapping/understanding
+             of a <path> and there is no default, the <path> and any
+             mappings that use it will be ignored.
+    result - directory to put the results
+             The package will be called
+                  <name>-<version>-<package-version>.tar.<ext>
+             Where <ext> == bz2 for bzip2 and gz for gzip
+
+Joinpoints introduced:
+    begin_map - Advised on any file index matching
+                         the aspect's specified file-types
+                         before it is mapped into the package.
+       extra parameters: from: the index of the source file
+                         tos: the indicies of the targets installed
+                         mapping: the mapping dictionary
+       (the extra parameters may be manipulated to change
+        the default mapping behavior)
+    end_map - Advised on any file index matching
+                       the aspect's specified file-types
+                       after it is mapped into the package.
+       extra parameters: from: the index of the source file
+                         tos: the indicies of the targets installed
+                         mapping: the mapping dictionary
+    archive_file - Advised on any file index matching
+                  the aspect's specified file-types
+                  before a single file is archived
+                  (if a directory is the source, this will advise on
+                   every file and every directory in the source)
+       extra parameters: from: the path of the source file
+                         to: the path of the target installed
+                         mapping: the mapping dictionary
+                         info: tarinfo object for file
+                               (can be manipulated
+                                to affect the behavior of the file)
+    mapping_complete - Advised when all the mappings have been
+                       executed.
+                         This is a good place to add any files,
+                         or links, etc.  It is unfiltered, so
+                         all aspects that define handlers for this advice
+                         will be advised.
+                         NOTE: Other data may be added to
+                               the data archive as necessary
+                               to fully support the format and
+                               platform.  This addition of files
+                               should be managed through the use
+                               of the package controls.
+     control - Advised before writing a 'control' defined entry
+        extra parameters: control: Name of the control being processed
+
+Flowcontrol Advice introduced:
+     doNotMapFile - Avoid archiving the given file.
+                        Can be recommended on begin_map or map_file.
+     ignoreControl - Do not process the control.
+                        Can be recommended on the control advice.
+
+Install Map Definitions:
+    :: path ::
+        root - The root file system of the install target
+        python-lib - Specifies that the path is a python lib path.
+    :: user ::
+        root - The root user ('root', 0)
+        someone - The someone user ('someone', 64)
+    :: group ::
+        root - The root group ('root', 0)
+        someone - The someone group ('someone', 64)
+
+Package controls:
+    Controls are broadly defined dictionaries that should make
+    some sense to the packager.  For example, a Debian 'control'
+    file the dictionary of stanzas intended to be written should be
+    the in the package control entry.  For a postinst, a shell script
+    string under 'script'.
+
+    TODO: Define the structure for common package controls.
+
+    Use debian control file names to correspond to the control
+    as they tend to be the most extensive set and most complex
+    - if the debian control file doesn't align with the package
+      control need, then add it with a different name.
+    (RPM spec file sections, for example, tend to somewhat align
+       with the debian control file names)
+    See:
+        https://www.debian.org/doc/manuals/maint-guide/dreq.en.html
+        https://www.debian.org/doc/manuals/maint-guide/dother.en.html
+
+ Classifier Meanings:
+     Classifiers can be used by packagers to determine metadata and other
+     package attributes.  By default, Programming Language is used
+     (currently for Java and Python) and License to determine the
+     shorthand name for a license
+
+___________________________________________________
+
+Section Type: Shell
+----Info----
+Purpose: Execute a shell script
+Type: Module   Library: csmake (core)
+Options:
+  :: Script Definition Options ::
+    command(<phase>) - Shell command to execute in specified phase
+          If (<phase>) is not specified: 'build' is assumed
+    command-clean(<phase>) - Like 'command', but file tracking
+                    will assume cleaning is occurring
+                    Thus files for file delcarations
+                    and mappings will be checked for removal.
+          If (<phase>) is not specified: 'clean' is assumed
+    command-no-verify(<phase>) - Like command, except file tracking
+                    will not verify the files for tracking.
+    NOTE: If multiple commands are specified for a single phase
+          the first one found is used.
+    ALSO NOTE: <phase> may specify multiple phases comma (,) delimited
+
+  :: Execution Options ::
+    env - (OPTIONAL) Reference to one or more ShellEnv
+                     section(s) to evaluate.
+                     (May be any section that yields a dictionary
+                      with keys that are valid shell identifiers)
+             Default: Uses the csmake execution environment
+             (comma and/or newline delimited)
+    exec - (OPTIONAL) Will execute given command as the shell
+             Default: /bin/bash
+
+  :: Parsing Options ::
+    line-pad - (OPTIONAL) character to use to pad every line to preserve
+                          leading spaces.  Useful if using python as
+                          the 'exec', for example.
+Phase: Any
+File Tracking:
+    A shell variable is defined named _MAPPING that represents the
+    definition of **maps in the shell environment.
+    _MAPPING may be iterested in the shell, e.g.:
+        for map in $_MAPPING
+    The structure of each map is:
+         <from1>,,<from2>,,...;;<to1>,,<to2>,,...
+    If exec is a bash shell patched with the shellshock fixes,
+    the environment will also contain two accessor functions
+         _froms and _tos
+    The functions should be used in a subshell like:
+         $(_froms $map)
+    Which would yield:
+         <from1> <from2> ...
+    NOTE: because of the use of ';;' and ',,' as delimiters, the mapping
+          functions cannot handle files containing ',,' and ';;'.
+    ALSO NOTE: The shellshock patch requires exported functions to
+               be surrounded with BASH_FUNC_<name>%% to be valid
+               in the bash environment..._froms and _tos are both defined
+               in this manner.
+Examples:
+    [ShellEnv@my-command-env]
+    THIS_DIR=mydir
+
+    [Shell@my-command]
+    command = mkdir -p ${THIS_DIR} && pushd ${THIS_DIR}
+       ifconfig > my.cfg
+       ls
+       popd
+       ls
+    env = my-command-env, default-env
+
+    The following will iterate through a group of
+    files defined in the my-files group and move each one to
+    essentially a new path and a new extension
+    in the test and build phases:
+
+    [Shell@my-mapped-command]
+    **maps=<my-files> -(1-1)-> %(APATH)s/{~~filename~~}.newer
+    command(test, build) = for x in $_MAPPING
+       do
+           for from in $(_froms $x)
+           do
+               for to in $(_tos $x)
+               do
+                   mv $from $to
+               done
+           done
+       done
+
+    This example will create a tarball containing the given files in
+    the mapping in the 'build' phase and cleans the zip up in the 'clean'
+    phase:
+    [ShellWithMapping@my-archive]
+    **maps=<the-files> -(*-1)-> %(LOCATION)s/my-archive.zip
+    command = for x in $_MAPPING
+        do
+            tar -czf $(_tos $x) $(_froms $x)
+        done
+    clean-command = for x in $_MAPPING
+        do
+            rm -rf $(_tos $x)
+        done
+    NOTE: This wouldn't cover all cases, say where a second file was
+          introduced in the "to" side of the mapping and the mapping
+          was changed to a -(*-*)-> or possibly if a second clause
+          is added using the '&&' conjunction for **maps
+
+___________________________________________________
+
+Section Type: ShellAspect
+----Info----
+Purpose: Execute out to a shell command
+         on advice of aspect joinpoints
+Type: Aspect   Library: csmake (core)
+Options:
+    command(<point>)
+       - shell command to execute (semi-colons need to be escaped)
+         where <point> is either
+             command(<joinpoint>) or
+             command(<joinpoint>__<phase>)
+             (just as any other aspect)
+    advise(<point>[#<time>]) = <advise point>:<vote>
+       - Will vote Yes or No on the given advice control point
+         (only on commands implemented)
+         <time> (optional) represents what it will do on the
+                specified time the
+                the joinpoint specified is executed for the given step
+                If not used the same advice will be given every time
+         <advise point> is the flow control point to advise on
+             (e.g., tryAgain)
+         <vote> is either True or False
+    env - (Optional) Reference to a ShellEnv to use
+          Can be multiple envs, comma or newline separated
+          Default is the csmake execution environment
+    exec - (Optional) Shell command to use
+          Default is /bin/bash
+Phase: Any
+Joinpoint: Any
+    Defaults are:
+        avoided - given when a section will be avoided ~~future~~
+        start - given when a section will be started
+        passed - given when a section completes successfully
+        failed - given when a section fails
+        exception - given when a section causes an exception
+        end - given when a section completes execution
+    Flow control issues for advise are:
+        doNotStart - checked after 'start'
+        tryAgain - checked after passed, failed, and exception
+        doNotAvoid - checked after 'avoided' ~~future~~
+Example:
+    [ShellEnv@my-command-env]
+    THIS_DIR=mydir
+
+    [Command@my-step]
+    stuff=happens
+
+    #This will shell at the start of my-step in the 'build' phase
+    [&ShellAspect@my-step doshellstuff]
+    command(start__build) =
+       mkdir -p ${THIS_DIR} && pushd ${THIS_DIR}
+       ifconfig > my.cfg
+       ls
+       popd
+       ls
+    env = my-command-env, default-env
+___________________________________________________
+
+Section Type: ShellEnv
+----Info----
+Purpose: Adds specified key/value pairs into a shell environment
+         (May also be used with other modules that want a private
+          environment)
+Type: Module   Library: csmake (core)
+Phases: *any*
+Options: Adds all flags into the environment for future steps
+Example:
+    [ShellEnv@my-command-env]
+    THIS_IS_AWESOME = this is/a really/coolpath
+
+    [Shell@do-awesome]
+    env=my-command-env
+    command=echo $THIS_IS_AWESOME
+
+    When used with a "Shell" section's "env" option, $THIS_IS_AWESOME
+    would be available in the scripts defined in that Shell section,
+    as in the [Shell@do-awesome] section above.
+
+___________________________________________________
+
+Section Type: ShellToEnvironment
+----Info----
+Purpose: Puts a shell environment variable into the csmake environment
+Type: Module   Library: csmake (core)
+Description:
+         This enables the ability to paramiterize a build
+         - should be used with caution as this opens builds
+           up to depend on a specific shell context to work properly
+           which is antithetical to the theory of operation
+           behind csmake
+         *Options substitutions, e.g., %(var)s, are NOT allowed*
+Phases: *any*
+Options: Adds all flags into the environment for future steps
+         The value is a shell variable that should have been
+         defined before csmake was executed.
+Example:
+    [ShellToEnvironment@pull-parameters]
+    csmake-build-number=BUILDNO
+    branch-to-pull=BRANCH
+
+    The 'pull-parameters' section would pull 'BUILDNO' from the
+    shell enivronment that csmake is executing from and place it
+    in the csmake environment variable called "csmake-build-number"
+    Likewise with 'BRANCH', 'branch-to-pull' would be set to
+    whatever ${BRANCH} would evaluate to from the shell that launched
+    csmake.
+
+___________________________________________________
+
+Section Type: TestPython
+----Info----
+Purpose: Running python unit testing (using unittest test definitions)
+         (assumes python 2.7)
+Type: Module   Library: csmake (core)
+Phases:
+    test - Will run python unit tests
+Options:
+    test-dir - path to the unittest.TestCase implementations
+    test - names of the python files to execute unittests from
+           glob style wildcards may be used.
+    source-dir - path to the sources under test
+    resource-dir - (OPTIONAL) path to any resources for testing
+    ignore-files - (OPTIONAL) Files to ignore coverage for
+                   comma or newline delimited
+                   (may use glob wildcards)
+    xml-report - (OPTIONAL) When specified, will output an xml report
+                            to the file provided
+                            - relative paths will be under %(RESULTS)s
+    html-report - (OPTIONAL) When specified, will output an html report
+                             to the file provided
+                             - relative paths will be under %(RESULTS)s
+    * - any options you wan to pass through to the tests
+Notes:
+   The tests must reside under the implementation under test
+     I.e., no '..' is allowed in the path
+           from the code being tested to the tests.
+   Every directory in the path to the tests must have __init__.py.
+   Every test .py file must have the name of the test class, i.e.,:
+         class testMyStuff_stuff(unittest.TestCase):
+     Must be in a file called testMyStuff_stuff.py
+   The csmake runtime will add a "csmake_test" member to
+     the TestCase object which is a pointer back to this module
+     the "options" passed to the section are at csmake_test.options.
+Requires:
+    coverage (>= 4.0 preferred)
+        (apt-get install python-coverage
+         or pip install coverage)
+
+___________________________________________________
+
+Section Type: VersionFormatEnv
+----Info----
+Purpose: Generate version strings into the csmake environment
+Type: Module   Library: csmake (core)
+Phases: Any
+Options:
+    format - The format of the version string to generate
+             into the environment.  Use version designations
+             in curly braces to bring in parts of the version
+             together.
+             NOTE: 'primary' is the version designation defined in
+                             the metadata
+                   'primary-major' is the version designation of just
+                             the major version number
+                   'primary-minor' is the version designation of just
+                             the minor version number
+                   'primary-patch' is the version designation of just
+                             the patch revision number
+    env-name - Environment variable name that will hold the version
+               string specified by 'format'
+Example:
+    [VersionFormatEnv@my-version]
+    format = {primary-patch}+{build-number}
+    env-name = FULL_BUILD_NUMBER
+
+    Assuming that a 'versioning' section (or something else) has
+    defined a version designation of 'build-number' (for this example
+    let's assume it's defined ad 151512) and the 'metadata' section
+    has defined a version of say 5.2.4141.  This section would produce
+    a csmake environment variable 'FULL_BUILD_NUMBER' set to the value
+    4141+151512.
+
+___________________________________________________
+
+Section Type: command
+----Info----
+Purpose: Execute a series of build steps - the initial step is
+         a command provided by the command line input (see --command)
+Type: Module    Library: csmake (core)
+Phases: *any*
+Options: The keys are used to order the steps lexicographically
+       e.g.: 1, 10, 2, 20, 200, 3, A, a (suggestion use 0000-9999)
+       The values are atomic groups of steps
+          , - denotes step follows the next
+          & - denotes steps that can be run in parallel
+    description - Provides a description of the command that
+                  csmake will use for --list-commands.
+Example:
+    [command@build-pond]
+    description = "This will build a small pond"
+    10 = init
+    20 = repo1 & repo2 & repo3, repo4
+    30 = createPond
+    40 = stockFish
+
+    Execution of the "build-pond" command would proceed as follows:
+    The init section would execute
+    Then repo1, repo2, and repo3 would execute in parallel
+    Then repo4 would execute
+    Then createPond would execute
+    Finally, stockFish would execute
+
+___________________________________________________
+
+Section Type: copyright
+----Info----
+Purpose: Create a copyright clause for the software described in
+         a csmakefile.
+Type: Module   Library: csmake (core)
+Phases: *any*
+Options:
+    holder - Holder(s) of the license
+    years - The years in which the copyrighted material has bee
+           updated.  E.g., 2014   or   2014-2017    or   2012,2015-2016
+    license - (OPTIONAL) Describes a license (e.g., non-free, GPL2+)
+              see https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/index.html#license-field
+              and https://spdx.org/licenses/
+    license-text - (OPTIONAL) The text for the full license to include
+    disclaimer - (OPTIONAL) A statement about the copyright
+      (for example, for Debian, why the copyright is non-free)
+    comment - (OPTIONAL) Any apropos comment for the copyright
+Results: A dictionary containing the options provided.
+References:
+    The most comprehensive copyright documentation for packaging
+    comes from debian and is the inspiration for this module:
+    https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+___________________________________________________
+
+Section Type: environment
+----Info----
+Purpose: Adds specified option(key)/value pairs into the environment
+Type: Module   Library: csmake (core)
+Phases: *any*
+Options: Adds all options into the environment for future steps
+Example:
+    [environment@default]
+    mypath = /another/abs/%(dpath)sPath/yeah
+    dpath  = this is/a really/coolpath
+
+    mypath would evaluate to:
+          /another/abs/this is/a really/coolpathPath/yeah
+    and both "mypath" and "dpath" would be entered into the csmake
+    environment.
+Usage:
+    csmake environment variables may be accessed using the python
+    dictionary "mod" operator notation, %(<variable>)s
+    So, with the example above, a later step could access 'mypath'
+    by using %(mypath)s in one of its options.
+References:
+    https://docs.python.org/2/library/stdtypes.html#string-formatting
+___________________________________________________
+
+Section Type: include
+----Info----
+Purpose: Include another build specification
+Type: Module   Library: csmake (core)
+Phases: *any*
+Options:
+    file - File name of the build specification
+    path - (OPTIONAL) Path to the build specification
+           DEFAULT: %(WORKING)s
+           (i.e., the path defined by --working-dir)
+    description - (OPTIONAL) A description of what the specification is
+Example:
+    [include@defaults]
+    description = "All the defaults used in these builds"
+    path = %(WORKING)s/makefiles
+    file = defaults.csmake
+Notes:
+    All ~~phases~~ sections included in other specifications are ignored
+___________________________________________________
+
+Section Type: installmap
+----Info----
+Purpose: Generically describe a set of files and their intended
+         installation points for a Packager installer target.
+Type: Module   Library: csmake (core)
+Description:
+         The module will parse the various section options and return
+         a list of dictionaries with the following keys (as defined in
+         Options, below):
+            maps - dictionary of file mappings into the installation
+                   target
+            key - <key>
+            type - <source-type>
+            intent - <source-intent> (None if unspecified)
+            destination - <destination>
+            copyright - [ parsed copyright dictionaries ]
+               (If not defined, will inherit the copyrights defined
+                in the metadata.  If that's not defined, will
+                be None)
+            files - list of dict containing:
+                owner - (<owner>, uid)
+                group - (<group>, gid)
+                mod - "chmod" style octal code
+                file - <file or directory to install>
+Phases:
+    *any*
+Options:
+    map_<mapkey> -
+        map: a file mapping (as in **maps)
+             **NOTE: Be sure to escape any right curly braces '}'
+                     That are not marking mapped path names,
+                     e.g., {~~file~~}
+        [copyright: <copyright-id>]
+            should refer to a copyright specification in the makefile
+            if not included, the metadata's copyright will be used.
+        owner: a user on the installed system
+        group: a group on the installed system
+        permissions: permissions to provide for the installed file
+
+    path_<pathkey> - <ID>
+        The pathkey represents a semantic mapping that
+        packaging modules would define.
+        The ID is used in the maps enclosed in curly braces
+        to denote a necessary substitution.
+
+        For example:
+            path_root=INSTALL_ROOT
+            map_mymap=map: <bin> -(1-1)-> {INSTALL_ROOT}/bin/{~~file~~}
+
+        A Packager would key off of the "root" part to define its
+        understanding of what 'root' means.  INSTALL_ROOT would
+        mark where that 'root' path goes in the mappings.
+
+        The purpose for having this 'path_root=<ID>' notation is
+        to allow the 'installmap' section the ability to unify different
+        Packager's paths into a common delivery definition.  For example,
+        say we have a WindowsMSIPackage and a DebianPackage that
+        we want to create a common 'installmap' section for.
+        For the sake of the example, let's assume DebianPackage has
+        a "root" path, and WindowsMSIPackage has a "ProgramFiles" path
+        and we want to unify these concepts into a single ID,
+        INSTALLATION_POINT.  We would define the following options in
+        the installmap section:
+            path_root=INSTALLATION_POINT
+            path_ProgramFiles=INSTALLATION_POINT
+
+        By doing this, we have avoided the need for two separate
+        installmaps, even though the concepts of "root" and
+        "ProgramFiles" are vastly different.
+
+    owner_<userkey> - <ID>
+    group_<groupkey> - <ID>
+        These options allow the installmap to unify differing user
+        definitions as a single user.  For example, a linux-oriented
+        packager may have a concept of a "root" user and root user
+        permissions, but a windows-oriented packager may have a
+        concept of an "Administrator" user and Administrator permissions
+        Allowing an installmap, for this example, to define:
+           user_root=ROOT
+           user_Administrator=ROOT
+        Allows the installmap to unify these permissions into a single
+        installmap definition.
+
+See Also:
+    copyright module
+
+___________________________________________________
+
+Section Type: metadata
+----Info----
+Purpose: Define the metadata of software described in the
+         csmakefile.
+Type: Module   Library: csmake (core)
+Description:
+         metadata is intended to be generic, encompassing
+         some major variables of software metadata generally.
+         - modules that package software for a specific purpose
+           will need to map this data to the appropriate fields
+           some suggestions are given below...
+
+         The behavior of this module is if a second metadata
+         module is invoked, it will push the results of the
+         previous metadata down in a metadata stack (accessible
+         by id from the MetadataManager instance)
+
+         ++++FUTURE++++
+         A well behaved process should have a final step that
+         will "end" its metadata  with an
+         endmetadata section in cases where a build needs to
+         manage multiple instances of metadata.  Ending metadata
+         will have the effect of making the previous metadata
+         current again.
+Phases: *any*
+Options:
+    NOTE: (<lang>) after the option
+          will specify value in a different language
+          en_US is default.
+          E.g., name(jp_JA)=<Japanese>
+          would define the name of the package in Japanese.
+    ALSO NOTE: 'Corresponds to: notes below are examples of
+                different metadata sets that correspond to
+                the metadata defined in this section
+                --- the lists are *not* comprehensive'
+    name - main name of the package (the actual csmake id)
+           (Corresponds to:  Debian: Package, Python: name)
+    version - The version of a product described by the
+               csmakefile.
+              Use of the Semantic Versioning standard
+              X.Y.Z is *strongly* encouraged where:
+                 X - major
+                 Y - minor
+                 Z - patch level
+              (see ::Versioning:: below)
+              NOTE: csmake will give a warning if this format is not
+              used for the version.
+              ALSO NOTE: The following version designations
+                         will be introduced from this option:
+                 at minimum:
+                    'primary': which will contain the entire string
+                               defined for version
+                 if Semantic Versioning is conformed to:
+                    'primary-major': Which will contain the 'X' part
+                                     of the version
+                    'primary-minor': Which will contain the 'Y' part
+                                     of the version
+                    'primary-patch': Which will contain the 'Z' part
+                                     of the version
+       (Corresponds to:
+           Debian: Version (product part), Python: version,
+           Gem: version, OVF: Product Section/Version)
+    description - Description of the package (language: en_US)
+    description(<lang>) - Description in another language
+    about - Extended description of the package (language: en_US)
+    about(<lang>) - Extended description of the package in another language
+    packager - The name and e-mail of the current person/org maintaing
+               the backage
+          (Corresponds to:  Debian: Maintainer)
+    copyrights - References to all applicable copyright modules
+          (Corresponds to:  Wheel: holders are author)
+    manufacturer - The indivdual or company responsible
+           for creating and releasing the software.
+          (Corresponds to:  CSU: created_by)
+    classifiers - PyPi styled classifiers
+                   May translate to various fields in different package
+                   formats.  I.e., Topic could imply "Section" in debian
+                               and/or it could imply "Priority"
+                  In other words, the classifiers are interpreted
+                   by packagers to fill in some fields and information
+                   into the package metadata.
+    keywords - words used to describe the package
+    contains - metadata for object definitions that the object
+               described by this metadata contains
+               may be used in conjunction with or in-place of
+               the "files" option.
+               <package-metadata-id>[(filetype fileintent, filetype fileintent, ...)]
+
+  :: Package Relationship Definitions ::
+    These may be ids that reference a "package name map" module
+    as packages may vary in name and number across packaging systems
+    Names used in this section can be mapped to specific
+    packaging system names via PackageNameMappings modules.
+
+    depends - list of dependent packages
+        (debian: Depends, python: install_requires)
+    recommends - list of recommended packages
+    suggests - list of other useful packages
+    enhances - list of packages this package is useful to
+    pre-depends - list of packages that must be installed before
+                  this package can be installed
+    breaks - list of packages that this package will break
+    conflicts - list of packages that will conflict with this package
+    provides - list of packages this package stands in the place of
+    replaces - list of packages that are replaced by this package
+
+Environment:
+    All options are added to the environment as 'metadata:<key>'
+    e.g.: 'metadata:name'
+
+csmake Internals:
+    In csmake module implementations, self.env.metadata is a
+    MetadataManager containing the information about the current
+    metadata and versioning.
+
+References:
+  :: Classifiers ::
+    http://pypi.python.org/pypi?:action=list_classifiers
+
+  :: Versioning ::
+    http://semver.org
+    http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Version
+    http://www.python.org/dev/peps/pep-0440/
+    http://www.rpm.org/max-rpm/s1-rpm-inside-tags.html
+    http://guides.rubygems.org/specification-reference/#version
+    http//twiki.cern.ch/twiki/bin/view/Main/RPMAndDebVersioning
+    http://msdn.microsoft.com/en-us/library/aa370859%28v=vs.85%29.aspx
+    http://msdn.microsoft.com/en-us/library/aa372488%28v=vs.85%29.aspx
+    <Product Section> definition from OVF Specification:
+        http://www.dmtf.org/sites/default/files/standards/documents/DSP0243_1.0.0.pdf
+
+  :: Package Dependencies ::
+    https://www.debian.org/doc/debian-policy/ch-relationships.html
+
+___________________________________________________
+
+Section Type: subcommand
+----Info----
+Purpose: Execute a series of build steps
+         (Not intended to be directly executed from the command line)
+Implements: command
+Type: Module   Library: csmake (core)
+Phases: *any*
+Options: The keys are used to order the steps lexigraphically
+         e.g.: 1, 10, 2, 20, 200, 3, A, a (suggestion use 0000-9999)
+         The values are atomic groups of steps
+            , - denotes step follows the next
+            & - denotes steps that can be run in parallel
+    description - provides a description (documentation) of what
+                  the subcommand is supposed to accomplish.
+Example:
+    [subcommand@some-common-steps]
+    description = "Encapsulates all the steps"
+    10 = repo1 & repo2 & repo3, repo4
+    20 = createPond
+    100 = final-step-not-really
+
+    [command@build]
+    description = "This will build a small pond"
+    0000 = init
+    0010 = some-common-steps
+    0020 = stockFish
+
+    In the example above, if 'build' is executed, then the sections
+    would be performed as follows:
+    First, an init section would be executed
+    Then, the subcommand, 'some-common-steps' would be executed
+         which would lead to the following steps executed in *this*
+         order:
+             1) repo1, repo2, and repo3 would execute in parallel
+             2) repo4 would then be executed
+             3) *** final-step-not-really *** would execute next
+                NOTE: 100 comes before 20 lexicographically
+             4) createPond would execute last for the subcommand
+    Finally, 'stockfish' would execute.
+
+___________________________________________________
+
+Section Type: versioning
+----Info----
+Purpose:
+    To add special version information beyond the standard
+    "major"."minor"."patch" defined in the metadata.
+Type: Module   Library: csmake (core)
+Description:
+    The version information defined by this section will have a
+    designation (defined by the label provided in the "designation"
+    option for this section).
+    The designation is used when constructing a specialized
+    version.  For example, the FormatVersionEnv module has a "format"
+    option that will substitute a {<designation>} with the value
+    defined for that designation in the 'versioning' section.
+Phases: *any*
+Options:
+    designation=Will add to the metadata version string.
+         Warning: Specifying a version designation of 'primary'
+                  will overwrite the version specified in the metadata.
+    format= Any string.  keys are enclosed with curlies
+         e.g., {datetime}.{getSHA}
+         Note: Any specified csmake environment variables are substituted
+         before the keys are processed.
+    shell_<key>= executes a shell command and puts the
+                 result in for any references of {<key>} in the format
+                 option.
+    step_<key>=  executes a specified step and puts the result in for
+                 any references of {<key>} in the format option
+    value_<key>= places the string in for any references of {<key>}
+                 in the format option.
+    dry-run=(OPTIONAL) if True will only return the calculated
+            version string without updating the metadata.
+            Default: False
+ Example:
+     [versioning@my-special-version]
+     designation=special
+     format= +++{special-major}.{special-minor}-BUILD {build-no}
+     value_special-major=99
+     value_special-minor=133
+     shell_build-no=echo ${BUILDNO}
+
+     When this section is executed (assuming BUILDNO is defined in the
+        shell environment that executed csmake, and the definition
+        is for this example BUILDNO=52252) the "special" version
+        designation will contain or produce the value:
+            +++99.133-BUILD 52252
+
+___________________________________________________
+
+.EE
+
+.P
+A typical command-line might take this example form:
+
+.HP 4
+csmake --makefile=mymake.csmake --command=libraries build
+
+This will load the mymake.csmake specification from the current working
+directory, and send the 'build' method to every step specified in the
+ 'libraries' command.
+
+
+.SH ENVIRONMENT SUBSTITUTION
+
+Environment sections, like, [environment@my-environment], will create
+key-value pairs in the csmake execution environment.  These keys can
+be accessed by other flag definitions through the use of the pythonic
+dictionary substitution annotation: %(<KEY>)s
+(see: https://docs.python.org/2/library/stdtypes.html#string-formatting)
+for details.
+
+For example, with the following csmakefile:
+
+.EX
+    [environment@my-environment]
+    This=foo
+    that=bar
+    ANOTHER=baz
+
+    [Shell@do-something]
+    command=echo "My Example: %(This)s %(that)s %(ANOTHER)s"
+
+    [command@]
+    0000=my-environment, do-something
+.EE
+
+Running:
+
+.HP 4
+csmake --quiet build
+
+Will execute a shell script that would echo:
+
+.HP 4
+My Example: foo bar baz
+
+
+.SH FILE MAPPING AND TRACKING (**files, **maps, **yields-files)
+
+Within a csmakefile, every module step specified may be decorated with
+file mapping/tracking notation.  The modules may take advantage
+of the information provided, or may be completely oblivious to it, in
+which case, the mapping decorators just provide a simple reality check that
+csmake will enforce as it executes.
+
+Because these decorations can be on every step and are treated as special
+by csmake, they are prefixed with '**'.  This prevents namespace collision
+with any flags and calls out that these decorations have special semantics that
+are global to csmake.
+
+Note that use of file mapping/tracking is optional unless a specific module
+relies on the information to do its work (which that module should document
+this dependency in a "Maps" or "Mapping" section).
+So, in other words, mapping can be partially defined,
+that is, if a step requires use of the mapping decorations - you can
+just decorate that section by itself with the necessary **files and **maps
+decorations.
+
+Some kinds of builds, like diskimage-builder builds, do not
+lend itself well to easy notation and tracking of files for every part
+of the build.  Some of the most useful places for file tracking is
+when you are dealing with large amounts of files that can change, grow or
+shrink as the project evolves and that are all the same type,
+like a lot of c++ files, or dealing with how to get a set of finalized
+build artifacts into a distribution package (like into a deb package).
+
+Files (or sets of files) are defined with a multi-axis type, which is detailed
+below.  The reason for having multiple axes for the types files can have is to
+allow for the various kinds of activities one normally does to get from
+a pile of initial sources to a deliverable product.  For example, some steps
+may want to work with a particular type of file, like an xml, json, c++, ps,
+or other specific technical type of file.  Other steps may only care about
+the intent or purpose a file might serve.  Still other steps, may not care
+about any of that but only want to deal with a group of hetrogeneous files and
+perhaps just the final results in that group - for example, a packager that
+wants to deliver a set of documentation and libraries.
+The file tracking in csmake allows steps to use one or more of these
+approaches as axes in the types defined for files tracked in csmake.
+
+csmake intends to provide support for the entire process of getting
+from initial work to a final (possibly set of) end-user deliverable result(s)
+
+Example:
+
+.EX
+    [Shell@dostuff]
+    **yields-files=<stuff (text:example)> blank.txt
+    command=touch blank.txt
+.EE
+
+The **yields-files decoration above says that the result of the step is
+expected to be a file in %(RESULTS)s/blank.txt.
+If that file doesn't exist
+when the step completes successfully (or vice-versa for cleaning type phases)
+csmake will complain, providing a check between expected and actual csmake
+results.
+
+The "stuff" part of the type of blank.txt is simply the id of a bucket
+that tracks hetrogeneous groups of files (as well as what files resulted from
+earlier files).  "text" refers to the specific type of file, it's simply a text
+file.  If it were a c++ file, we would note "c++" here, or a pdf, "pdf".
+Finally, "example" simply is a "purpose", if this file were documentation,
+we might say the "purpose" is "documentation".   More details on the axes are
+below.
+
+There are three different file tracking decorators that may be used:
+.IP **files 0.2i
+Declare that files are expected to exist before the section
+begins execution.
+.IP **maps
+Define how files should be mapped through the execution of the
+module.
+.IP **yields-files
+Declare that files are expected to exist after the
+module is finished (when this is not or cannot be handled by **maps).
+
+These checks are not enforced when a module doesn't define an action for
+the phase that is being executed (or use of these decorations would be
+completely untenable).  Related note for future work - differing phases
+may yield different files, or mappings of files.  This is not currently
+handled by the file mapping decorations.
+
+SYNTAX for the file decorations:
+
+declarations: <id (type:intent)> location
+
+mappings: <id (type:intent)> location -(map)-> <id (type:intent)> location
+
+The decorations can have multiple declarations or mappings,
+ - to specify multiple mappings, use double ampersand (&&)
+ - to specify multiple file declarations (even within one side of a mapping),
+   use a comma (,) or a newline
+
+For example a complex mapping might look like:
+
+.EX
+  <class (mytype:class-a)> *-a.my, <class (mytype:class-b)> *-b.my
+              -(*-1)-> <class> topclasses/{~~file~~}
+  && <class (mytype:class-c)> *-c.my
+              -(*-1)-> <class> bottomclasses/{~~file~~},
+                       <others> track/{~~filename~~}-track.my
+.EE
+
+.P
+The various parts of the file tracking syntax above are as follows:
+
+.IP id 0.2i
+Defines (or adds or looks up) files in a common grouping denoted by the id.
+In other words an id is just a name for referencing a grouping of files.
+For the purposes of tracking files, ids have a unique property in that
+when used alone to look up files for mapping, the last set of files produced
+under the given id will be the result).
+For example, a process that takes files declared with an
+id of 'MATH' that takes the files in math through .c -> .i -> .o -> .lib.
+If you map just the 'MATH' id to a package, you will get just the .lib file(s).
+So, in other words, ID maintains a history of mappings through a build.
+MORE BELOW on this "bucket" and "history" concept...
+
+.IP type
+Declares (or looks up) files to be or posess a certain defining characteristic.
+For example, a pdf file has a unique magic number, is viewable by software
+that is specialized to read pdfs, it is recommended to always mark the 'type'
+of a pdf file as 'pdf'.  Use of mime types, or more specific typing than even
+what mime types provides, is encouraged.  Some suggested examples:
+.RS
+.IP C 2.4i
+denote it as type 'c'.
+.IP ELF
+denote with, 'elf-exec', or 'elf-exec-32', or 'elf-PIC', etc.
+.IP Bash
+with 'bash'.
+.IP Python
+with 'python'.
+.RE
+At the end of the day, it's still just a label and not strictly enforced, but
+the purpose is to precisely identify types of files (i.e., what you can validly
+do with or to the file from the perspective of what standards the file conforms
+to).
+
+.IP intent
+Annotates the intent of the use(s) for the file specific to your environment.
+For example, a python parsable file may be an executable script with a
+she-bang (#!) magic number or could be a module or package.  You can
+use intent to disambiguate uses of files even though they may have the
+same actual 'type'.  Use of type and intent together can be handy to
+help ensure you only give a c compiler the c source files you want in libraries
+when you're building libraries.  Or, that you only map python files that are
+intended for use as executable tools to /usr/bin, for example.
+
+.IP location
+This actually specifies a physical place on a hard drive to look for or map
+from.  For mappings, use of wildcards can be helpful for maintaining
+file names with a common past, e.g., *.c -(1-1)-> *.o  would take all tracked
+files with a .c extention in the current build execution and map them all
+to .o files, where the actual file name (the star part) for each file is
+preserved.  In cases where there are multiple stars, they match in order.
+For example, *iddy*biddy*.py -(1-1)-> *my*train*.pyo would take a file
+named THEiddyTINYbiddyCAR.py and expect the result to be THEmyTINYtrainCAR.pyo
+As explained below, a location can make use of simple stars or can utilize
+regular expressions (MORE BELOW).
+
+.IP map
+The values of map specify how to group the files and iterate over them.
+.RS
+.IP 1-1 2.4i
+Every single file that is denoted on the left of the mapping is mapped
+to every single file on the right.  That is, the iteration is MxN times
+where M are the files on the left and N are the files on the right.
+*.c -(1-1)-> *.i, *.o where the directory had, a.c, b.c, c.c, would iterate
+like:
+
+.EX
+    a.c -> a.i
+    a.c -> a.o
+    b.c -> b.i
+    b.c -> b.o
+    c.c -> c.i
+    c.c -> c.o
+.EE
+.IP *-1
+All the files on the left are mapped to every single file on the right.
+So with the same example file set of, a.c, b.c, and c.c:
+    *.c -(*-1)-> *.i, *.o would iterate
+like:
+
+.EX
+    a.c, b.c, c.c -> a.i
+    a.c, b.c, c.c -> a.o
+.EE
+
+Note that it is indeterminate which name the .i and .o file would end up with
+in this case and it always makes better sense to provide a concrete name for
+any files mapped *-1.
+
+.IP 1-*
+Each file on the left maps to all the files on the left.  To continue the
+fileset of [a-c].c for example, *.c -(1-*)-> *.i, *.o iterates like:
+
+.EX
+    a.c -> a.i, a.o
+    b.c -> b.i, b.o
+    c.c -> c.i, c.o
+.EE
+
+.IP *-*
+All the files on the left are mapped to all the files on the right.
+Carrying the example, where *.c -(*-*)-> *.i, *.o:
+
+.EX
+    a.c, b.c, c.c -> a.i, a.o
+.EE
+
+Note that, again in this case, the naming on the right is indeterminate.
+.RE
+
+
+
+.P
+For mappings, there are some special symbols that are defined to help
+avoid calling out specific files, or paths...in other words to make it
+easier to specify mapping behavior.
+
+.EX
+  {~~file~~} - the entire file name, so 'blah.xy' for example.
+  {~~filename~~} - the file name without an extension,
+                   'blah' for 'blah.xy'
+  {~~ext~~} - the extension for a file, 'xy', for 'blah.xy'
+  {~~path~~} - the path leading up to the file
+
+  ///
+  Future work should consider other useful monikers, ~~id~~,
+  and other type axes, possible for example,
+  ~~version~~, etc.  User defined - not sure what that
+  would look like, since environment variables and file
+  matching can already be used.
+  ///
+.EE
+
+Use of these special symbols on the right of a mapping
+(they don't really make sense on the left side) allow the left side
+location to be completely unspecified.
+
+.P
+Here are some examples of file declarations and mappings.
+Assume that as we progress through the examples, the previous examples
+are "in play" or rather already defined and executed in the csmakefile being
+executed.
+
+.EX
+  **files=<libMATH (c:source-library)> math/*.c
+          <libGEO (c:source-library)> geo/*.c
+          <docs (roff:man-pages)> docs/*.roff
+.EE
+
+(NOTE: newlines or commas can be used to decorate with multiple declarations or
+mappings)
+
+.EX
+This example would define three groupings of files:  libMATH, libGEO, and docs.
+Files that match %(WORKING)s/math/*.c would be in the 'libMATH' group.
+Files that match %(WORKING)s/geo/*.c would be in the 'libGEO' group.
+Files that match %(WORKING)s/docs/*.roff would be in the 'docs' group.
+.EE
+
+If we then had a following section after the above with:
+
+.EX
+  **files=<libMATH (python:source-library)> math/python/*.py
+          <libMATH (c-header:dev-library)> math/*.h
+          <aux (python:scripts)> auxillary/*
+.EE
+
+.EX
+All the files in math/python/*.py would be added to the 'libMATH' group.
+All the files in math/*.h would be added, also, to the 'libMATH' group.
+All the files in auxillary/* would be added to the 'aux' group.
+.EE
+
+In the next section, let's assume we encounter (maybe it's a c compiler section):
+
+.EX
+  **maps=<(c)> -(1-1)-> <(ELF-object)> intermediates/{~~filename~~}.o
+.EE
+
+This would map anything that's identified as a c type file, to a .o
+Note, the ids (the buckets/groups) are preserved,
+in other words, the results end up in the same 'id' group that the sources
+started in.  So, for example if add.c was in the libMATH group the resulting
+ .o file will also be in the libMATH group.
+In fact, even if a new id (a new bucket) was provided for the .o's, the
+history of the .o's coming from their specific ids would be maintained.
+This allows buckets to maintain a list of their ultimate or final sets of
+files and provide smaller or alternate buckets to facilitate other parts
+of the build process.
+
+Now, let's assume that the next step will produce pyo's but just for the
+python files identified as intended for 'source-library':
+
+.EX
+  **maps=<(python:source-library)> -(1-1)->
+              <(python-object:dev-library)> bin/{~~filename~~}.pyo
+.EE
+
+Here, again the pyo's will all end up back in the same id group, and *only*
+the library intended python files will end up as pyo's
+
+Now, we want to pull files down from a related git project, for example.
+We could track the result of doing this using:
+
+.EX
+  **yields-files=<deps (erlang:dependencies)> mygitrepopath/*.erl
+                 <tools (bash:scripts)> mygitrepopath/scripts/*.sh
+.EE
+
+This will add two new buckets, 'deps' and 'tools'.  The 'deps' group would
+contain erlang files that are intended to be 'dependencies'.  The 'tools'
+group would have bash scripts that are intended, oddly enough, to be 'scripts'.
+
+OK, now let's say we want to build libraries:
+
+.EX
+  **maps=<libMATH (ELF-object)>
+            -(*-1)->
+                <(ELF-library:library)> bin/libmath.a
+         && <libGEO (ELF-object)>
+            -(*-1)->
+                <(ELF-library:library)> bin/libgeo.a
+.EE
+
+This maps only all ELF-object type files in each grouping to their respective
+libraries.  Note, that these object files are kept separate by
+the having separate id groupings, 'libMATH' and 'libGEO' in the file tracking 
+system even though they were all specified together
+for compilation and all landed in the same intermediates directory.
+
+Finally, let's deliver our theoretical project to a package. To help with this,
+there is a special module called installmap that is designed to allow
+the makefile developer a way to define how the bits are to be delivered
+agnostic to any particular packaging format (this is still experimental).
+The installmap uses mapping syntax along with other attribution.  For the
+purposes of this example, we're going to stick to using the decorations.
+
+So, say we wanted to map things into a package.  That might look like:
+
+.EX
+**maps=<(:library)> -(1-1)-> package/usr/lib/{~~file~~}
+       && <(:dev-library)> -(1-1)->
+               package/usr/lib/dev/project/{~~path~~}/{~~file~~}
+       && <(:scripts)> -(1-1)-> package/usr/bin/{~~file~~}
+       && <(erlang)> -(1-1)-> package/usr/lib/erlang
+.EE
+
+Here we've called out anything that has a "library" intent to be mapped to
+package/usr/lib in the result.  If we wanted the libraries to be in
+different locations, we could have used the ids instead, alone, which would
+have yielded the libraries because they were the last thing built for each
+id grouping, or we could have used both the id and intent.
+
+Here you notice, as discussed, the type system allows you to be non-specific
+about the entire type leaving things off that you don't care about, processing
+things together for some steps, but tracking them separately for others.
+
+The major drawbacks of most make/build systems is they either underspecify
+or overspecify how much file tracking you need to do, or what kinds, or
+limit the file tracking in such a manner that either maintenance of the
+build process or extensibility of the process becomes untenable.
+
+Here - this all really is just decoration.  There's no hidden magic to get a
+series of build steps to execute, you *have* to say exactly what you want
+to do.  So, no "ghost" files that you have to pretend exist to get a
+build step to run.  There's no hand-wringing about how a section might
+map files unless of course, you just want to wring your hands about
+it anyway....leave the decorations off and just do the step - pick up the
+file tracking in a later set of sections if desired.
+You don't have to spell out every single file or directory, unless you
+really want to.
+
+
+Locations, Mapping, and Regular Expressions
+
+As noted star notation and regular expressions are a couple of options that
+may be used in various ways with the location parts of the file
+mapping/tracking.
+
+As mentioned above:
+
+.EX
+  **maps= *.c -(1-1)-> *.o
+.EE
+
+Has the obvious connotation that the * on the right is filled by the contents
+of the match to the * on the left, and the * serves as a general purpose
+wild card.
+
+For file declarations, you can do any shell-like wildcarding.  So, for example:
+
+.EX
+  **files=<group (type:intent)> [1-5]??test*.[abc].b[1z]c
+.EE
+
+(following python's glob library)
+
+This also works for **yields-files
+
+If you need to have the full power of a regular expression, this is also
+available.  Lead the file location with two tildes '~~'.  For example:
+
+.EX
+  **files=<group (type:intent)> ~~(.*)(abbaca|xyzzy)[.]py
+.EE
+
+Using regular expressions for mapping provides the additional benefit that
+you can match groups defined on the left to the right.
+
+.EX
+  **maps= <(mytype)> ~~(?P<myfilepart>(a|b|c)*)-data
+             -(1-1)->
+                ~~processed.\\g<myfilepart>
+.EE
+
+This will match things like aabbabab-data and for that file it would map it to
+processed.aabbabab. Group numbers can also be matched for replacement on the
+right, such as \\1 or \\3 or \\g<1>. See:
+
+.EX
+    https://docs.python.org/2/library/re.html
+.EE
+
+.EX
+Note for FUTURE WORK:
+For the :dev-library map for the packaging in the example,
+it would be nice to use {~~rel-path~~} to
+be able to structure the results directory and then move that structure
+to the packaging ... include directory structuring for example.
+.EE
+
+.SH ASPECTS
+
+csmake will allow modules that implement cross-cutting concerns to
+join in execution of a build specification through the definition of
+joinpoints.
+
+For an overview of aspect-oriented programming see:
+
+.EX
+    http://en.wikipedia.org/wiki/Aspect-oriented_programming
+.EE
+
+The basic joinpoints defined are: start, passed, failed, exception, end
+
+Steps may introduce finer grained join points that aspects may participate
+in as well.
+
+To add an aspect into a build specification, simply refer to the aspect
+module like you would a regular csmake module, except lead it with an
+ampersand '&', for example:
+
+.EX
+[MyStep@dosomething]
+akey=avalue
+
+[&MyAspect@dosomething]
+change=stuff
+.EE
+
+Now, when dosomething is executed, any relevant joinpoints in the MyAspect
+module will be called.  Aspects are allowed to also participate in flow
+control.  For example, an aspect may vote to skip the section's execution,
+or try the exection again on failure after trying a fixup.  The issues
+available are 'doNotStart', 'tryAgain', and 'doNotAvoid'.  Just as modules can
+add more fine grained joinpoints to participate in, modules may also
+add more flow control issues that aspects can use to participate in the
+control of the module's flow of execution.
+
+Disambiguation of aspects
+
+One problem is sometimes, you may need to specify two aspect modules of the
+exact same type, For Example:
+
+.EX
+[MyStep@dosomething]
+akey=avalue
+
+[&MyAspect@dosomething a]
+change=stuff
+
+[&MyAspect@dosomething b]
+change=otherstuff
+.EE
+
+In order to allow both aspect instances, they have to be uniquely identified
+(this is a limitation of the ini file format).  This unique identifier
+simply must be legal within the confines of the pyhton ini file format...
+no effort is made to use or otherwise expose this id.
+
+.SH SEE ALSO
+
+csmake(1) PYTHON(1)
+
+ConfigParser
+   - https://docs.python.org/2/library/configparser.html
+
+.SH COPYRIGHT
+
+csmake is Copyright 2014-2016 Hewlett Packard Enterprise Development Company, L.P.
+All Rights Reserved
+

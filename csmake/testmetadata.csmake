@@ -1,0 +1,96 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+[metadata@do-meta]
+name=do-meta
+version=1.0.0
+description=blah
+about=more blah
+
+[metadata@another-metadata]
+name=another-metadata
+version=9.0.0
+description=another stuff
+about=more another stuff
+copyright=my-copyright
+manufacturer=A person <aperson@myname.me>
+classifiers=
+    Programming Languages :: Java
+
+[metadata@bad-metadata]
+name=badness
+version=xyzzy
+description=bad metadata test
+copyright=my-copyright
+
+[versioning@test-special-version]
+designation=special
+format={a}.{b}+{c}
+value_a=111
+value_b=123
+shell_c=echo xyzzy
+
+[copyright@my-copyright]
+holder=Ty Coon
+years=1992
+license=GPL-2
+
+[~~phases~~]
+prep=test
+pull=test
+push=test
+clean=test
+**default= clean -> pull -> prep -> push -> clean
+**sequences=
+   clean -> pull -> prep -> push -> clean: Standard artefact bridge sequence
+
+[Shell@showmetadata]
+command-clean=
+    echo %(metadata:copyright)s
+
+[VersionFormatEnv@construct-special-version]
+format={primary-major}!~{special}
+env-name=my-special-version
+
+[Shell@show-special-version]
+command(prep)=
+    echo %(my-special-version)s
+
+[command@default]
+10=setup,something,something-else
+
+[command@something]
+10=setup
+
+[command@something-else]
+10=setup
+
+[subcommand@setup]
+10=do-meta, another-metadata
+
+[command@another]
+10=do-env
+
+[environment@do-env]
+myenv=master
+
+[command@bad-metadata-test]
+10=bad-metadata
+
+[command@test-versioning]
+10=another-metadata
+20=test-special-version, construct-special-version, show-special-version

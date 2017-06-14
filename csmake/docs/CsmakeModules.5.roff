@@ -1,0 +1,52 @@
+.\"# <copyright>
+.\"# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+.\"#
+.\"# This program is free software: you can redistribute it and/or modify it
+.\"# under the terms of the GNU General Public License as published by the
+.\"# Free Software Foundation, either version 3 of the License, or (at your
+.\"# option) any later version.
+.\"#
+.\"# This program is distributed in the hope that it will be useful,
+.\"# but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\"# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+.\"# Public License for more details. 
+.\"#
+.\"# You should have received a copy of the GNU General Public License
+.\"# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+.\"# </copyright>
+
+.\" Process this file with
+.\" groff -man -Tascii CsmakeModules.5.roff
+.\"
+.TH CsmakeModules 5 "DECEMBER 2016" "HPE Helion" "User Manuals"
+.SH NAME
+CsmakeModules - A directory for containing csmake module implementations
+
+.SH SYNOPSIS
+.B csmake [Options] [Methods]
+
+.B csmake --modules-path=:<custom modules path> [Options] [Methods]
+
+.SH DESCRIPTION
+The
+.B CsmakeModules
+is the directory along the path defined by the --modules-path flag on the
+csmake command-line which must contain valid csmake module implementations.
+
+csmake modules are python files and classes that meet some basic criteria
+in order to be used by csmake as a valid csmake module:
+
+<list criteria here>
+
+<incomplete - this man page will serve as the primer for a
+  module developer guide>
+
+.SH SEE ALSO
+
+csmake(1) csmakefile(5) PYTHON(1)
+
+.SH COPYRIGHT
+
+csmake is Copyright 2014-2016 Hewlett Packard Enterprise Development Company, L.P.
+All Rights Reserved
+

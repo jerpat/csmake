@@ -1,0 +1,264 @@
+#!/usr/bin/python
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+
+from ConfigParser import SafeConfigParser
+from Csmake.Settings import Settings
+from Csmake.CliDriver import CliDriver
+import sys
+
+CSMAKE_SETTINGS={
+    "help": [
+        False,
+        """Displays the short help text and usage""",
+        True],
+    "help-long": [
+        False,
+        """Displays the long help text and usage""",
+        True],
+    "help-all" : [
+        False,
+        """Displays the help text, phases, commands, and available types
+           NOTE: Output depends on the current working directory, the
+                 values of --makefile and --modules-path
+           ALSO NOTE: The output is extremely verbose""",
+        True,
+        "Show *all* help - very, very verbose"],
+    "list-types" : [
+        False,
+        """Displays all of the available section types (modules)
+
+           The output will vary based on current working directory 
+           and the value of --modules-path""",
+        True,
+        "Displays all available section types"],
+    "list-type" : [
+        None,
+        """Displays help for the given module (section type) name""",
+        False],
+    "list-commands" : [
+        False,
+        """Displays all of the available commands
+
+           The output will vary based on current working directory and/or
+           the value of --makefile, and the [command@...] sections in
+           that makefile""",
+        True,
+        "Displays all available commands"],
+    "list-phases" : [
+        False,
+        """Displays valid phase and phase sequence information
+
+           The output will vary based on current working directory and/or
+           the value of --makefile, and the [~~phases~~] section in that
+           makefile""",
+        True,
+        "Displays valid phase and sequence information"],
+    "version": [
+        False,
+        """Displays the version of csmake - does not proceed to build""",
+        True],
+    "configuration": [
+        None,
+        """Specifies one or more configuration files (comma separated)
+           to read from.  Configurations are ini files where the options
+           are the command-line flags and the values are the desired defaults.
+           All definitions go under the section 'settings', e.g.:
+           [settings]
+           makefile=mycsmakefile.csmake
+
+        Files will be read and applied in this order:
+            ${HOME}/.csmake.conf
+            ./.csmake.conf
+            <configuration-files> (left to right, if specified)
+
+        NOTE: Use only with extreme caution! 
+              Configuration files change the default command-line behavior""",
+        False,
+        "Specifies configuration file(s) to use"],
+    "makefile": [
+        './csmakefile',
+        """Points to a csmake build specification, default is ./csmakefile
+
+           It is possible to supply a list of specifications
+             as a comma-delimited list.
+           e.g., --makefile="a.csmake, b.csmake, c.csmake"
+
+           This will process the files in order and the result will
+           be a conglomeration of all the files as if they were one
+           contiguous file.
+
+           NOTE: repeated sections will override earlier sections without
+                 warning.""",
+        False,
+        "Point csmake at a specific csmakefile" ],
+    #TODO: Find a better way to specify synonyms so they list:
+    #      --makefile
+    #      --csmakefile=<default> ... <description>
+    "csmakefile": [
+        './csmakefile',
+        """Synonym for --makefile.
+           NOTE: If both --csmakefile and --makefile are specified, 
+                 --makefile is used and --csmakefile is ignored""",
+        False,
+        "Synonym for --makefile" ],
+    "command": [
+        None,
+        """Specifies the name of a 'command@' section to build
+           If not specified, it will build, [command@] 
+              or else [command@default] 
+              or else a command@ section will be picked and executed.
+
+           A "multicommand" can be specified for --command using ',' and '&' 
+           A comma ',' denotes linear execution and ampersand '&' 
+           denotes the ability to do the step in parallel.
+           I.e., --command="this, that & other" 
+             will do 'this' followed by 'that' and 'other' in parallel
+             for each phase given
+           NOTE: Use of a "multicommand" does two potentially unexpected
+                 behaviors.  It will create and execute a 'command' section
+                 called [command@~~multicommand~~].  It will also
+                 not be restricted to running only 'command' sections.
+                 This allows for, for example, an environment to be specified
+                 before executing a command:
+                     --command="myenv, dostuff" """,
+        False,
+        "Specifies the command(s) to run from the csmakefile" ],
+    "phase":[
+        None,
+        """Specifies the phase that will be dispatched to the modules
+           for each command.  Overrides any [Phases] given on the command
+           line.  By default, the command line arguments are used.
+           If no --phase or command line arguments are given, The "**default"
+           specified in the [~~phases~~] section is executed.  If there
+           is no **default option defined, then, literally, "default" is
+           the phase used.""",
+       False,
+       "Specifies the phase(s) to run"],
+    "verbose": [
+        False,
+        """Tells csmake to be verbose""",
+        True],
+    "debug": [
+        False,
+        """Tells csmake to log build debugging information""",
+        True],
+    "quiet": [
+        False,
+        """Tells csmake to supress all logging output on stdout.
+           All output from build steps will still appear""",
+        True,
+        "Supress all csmake logging and chatter"],
+    "no-chatter": [
+        False,
+        """Tells csmake to supress all the banner output.""",
+        True],
+    "dev-output": [
+        False,
+        """Tells the script to output csmake/module developer output""",
+        True],
+    "log": [
+        None,
+        """Sends all logging to specified file, None == stdout""",
+        False],
+    "settings": [
+        None,
+        """(experimental) JSON specification of settings to avoid using manifold flags""",
+        False,
+        "(experimental)"],
+    "replay" : [
+        None,
+        """Specifies a file to write out the executable replay makefile
+           ~~~EXPERIMENTAL, INCOMPLETE~~~""",
+        False,
+        "(experimental)" ],
+    "modules-path": [
+        "+local:+path",
+        """Tells the build where to look for Csmake Module Extensions
+
+           Sections specify a type and an id, like [type@id].
+           When a section is invoked, it is dispatched
+           to a python class named CsmakeModules.'type'.  
+           --modules-path controls the paths python will use to attempt to
+           resolve this class.
+
+           This option is a colon-delimited list of directories to search.
+           The directories are expected to each contain a CsmakeModules
+           subdirectory.
+
+           csmake Modules are expected to be named 'type'.py and have a class
+           defined called 'type', e.g., for a section
+           [GitDependent@partnerbits], csmake will load GitDependent.py
+           and expects to find a class named GitDependent.
+
+           csmake will create an instance and provide all the options of the
+           section as a dictionary to the instance's method named
+           after the phase executing.  For example: csmake clean
+           would cause the method "clean" to be dispatched to an instance
+           of the module.  The default method "default" will be dispatched, 
+           if the module's instance does not have the specified method 
+           defined.  "default" will also be dispatched if a phase is not
+           provided on the command-line and a **default phase sequence is not
+           defined in the [~~phases~~] section in the csmakefile.
+           
+           Finally, if +local is specified, it will use the current working
+           directory, and if +path is specified, it will use the
+           PYTHONPATH, e.g., /path/to/modules:+path:/another:+local
+           will search '/path/to/modules' then PYTHONPATH, then 'another',
+           then the current working directory.  For old school unix hacks
+           starting this option with colon will have the expected behavior
+           of +local:+path:<specified option>
+
+           NOTE: This should be used with caution.  If +path is not
+                 listed in the list of paths, the core csmake library
+                 will not be utilized (meaning things like command and metadata
+                 will not have standard definitions)""",
+           False,
+           "Changes the csmake module search path" ],
+    "results-dir" : [
+        "./target",
+        """Directory to place results - if a relative path is specified
+           it will be based on whatever is defined in --working-dir.
+
+           The csmake environment variable 'RESULTS' will hold this value.""",
+        False,
+        "Directory to place build results"],
+    "working-dir" : [
+        ".",
+        """Directory to read sources from - the current
+           working directory of the csmake execution will move to this 
+           directory until execution completes.
+
+           The csmake environment variable 'WORKING' will hold this value.
+
+           NOTE: This does not effect the current working directory of the
+                 --configuration option.""",
+        False,
+        "Source directory - this is '.' by default" ],
+    "keep-going" : [
+        False,
+        """The build will, by default, end when there is an error.
+           This flag will tell csmake to keep going even if there are errors""",
+        True,
+        "Keep going even if a build step fails" ]
+}
+
+
+if __name__ == '__main__':
+    cli = CliDriver(CSMAKE_SETTINGS,'csmake', '{{INJECT-csmake-version}}')
+    cli.main()

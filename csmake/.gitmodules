@@ -1,0 +1,3 @@
+[submodule "cloudsystem-docker"]
+	path = cloudsystem-docker
+	url = ../cloudsystem-docker

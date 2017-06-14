@@ -1,0 +1,123 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+[~~phases~~]
+default=Test default behavior
+build=Test build behavior
+
+[include@testinclude]
+description=Test that includes work
+file=testinclude.csmake
+
+[Hello@hello]
+this=value
+
+[Hello@other]
+xyzzy=True
+
+[&HelloAspect@other myaspect]
+cut=theaspect
+
+[HelloFailed@testfail]
+totalAttempts=2
+
+[HelloFailed@failNone]
+totalAttempts=1
+[&HelloAspect@failNone]
+
+[HelloFailed@failOnce]
+totalAttempts=2
+[&HelloAspect@failOnce]
+
+[HelloFailed@failTwice]
+totalAttempts=3
+[&HelloAspect@failTwice]
+
+[HelloSub@subclass]
+RiG = goodness
+
+[HelloSub@subclass-too]
+Ab = testing
+
+[Hello@hello-too]
+dfasfd=test
+
+[environment@test]
+hi=xyzzy
+thisis=aaaa
+
+[SkipMe@skip]
+
+[Shell@test-parallel]
+command= I=100
+    while [ "$I" -ne 0 ]
+    do
+        echo "$$: $I"
+        I=`expr $I - 1`
+    done
+    echo DONE
+
+[command@default]
+description=Do the hello build
+00=test
+01=hello
+02=other
+03=subclass
+04=testinclude, includedenvs, hello
+05=failOnce ;This should pass
+
+[command@another]
+description=Do a different hello build
+00=hello
+01=test
+01.1=subclass
+02=other
+
+[command@test-sub]
+description=Test subclass access to classes (custom class import)
+00=subclass
+05=subclass-too
+10=hello
+20=subclass-too
+30=subclass
+40=hello
+
+[command@failing]
+description=Do a failure test
+00=testfail
+
+[command@skiptest]
+description=Test success when a module is skipped
+00=skip
+
+[command@all]
+description=Do everything
+00=another
+01=default
+02=hello,test & subclass, other, test
+
+[command@test-test-parallel]
+description=Test the parallel section non-parallel
+00=test-parallel
+
+[command@parallel]
+description=Test parallel
+00=test-parallel & test-parallel & test-parallel & test-parallel & hello & test-parallel, test-parallel & hello & hello & hello & test-parallel
+
+[command@nested-parallel]
+description=Test nested parallel
+00=parallel & parallel & parallel

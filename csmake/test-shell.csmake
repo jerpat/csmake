@@ -1,0 +1,176 @@
+# <copyright>
+# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# </copyright>
+
+[metadata@shell-testing]
+name=shell-testing
+version=0.0.0
+description=Testing shell and file mapping
+about=Testing
+
+###Testing Shell
+[Shell@hello]
+command=echo "Hello, csmake!"
+command(buildme)=echo "Hello, me"
+command-clean=echo "Goodbye, csmake!"
+command-clean(cleanme)=echo "Goodbye, me"
+command-no-verify(other)=echo "csmake is doing what it wants to do"
+command(failing)=sidpfjosadfhasf
+
+###Testing ShellAspect
+[Shell@actual]
+command=echo "Actual shell"
+
+[Shell@another-actual]
+command=echo "Another actual shell"
+
+[Shell@echo-percent]
+command=echo %%
+
+[&ShellAspect@echo-percent-aspect]
+command(start__build)=echo %%
+
+[&ShellAspect@repeat-aspect]
+command(start__build)=echo "Before basic-aspect"
+command(end__build)=echo "After basic-aspect"
+advise(passed__build#1)=tryAgain:True
+command(passed__build)=echo "After basic-aspect, before end"
+
+[command@repeat-aspect]
+description=Do just the single try again advise
+0000=actual
+
+###Testing clean with file tracking
+[Shell@test-clean]
+command-clean=echo "Cleaning"
+command-no-verify(messaround)=echo "Messing around"
+**yields-files=<a (b:c)> this/does/not/exist
+
+[command@shell-clean-file-tracking]
+description=Ensure that file tracking will follow clean
+00=shell-testing, test-clean
+
+[command@default]
+description=Do the hello build.
+   Phases: build, clean, buildme, cleanme, other, failing
+01=hello
+
+[command@aspects]
+description=Do end to end smoke test of aspect implementation on ShellAspect
+00=repeat-aspect
+
+[command@test-percent-escaping]
+description = Invoke the 'echo-percent' shell declaration
+00=echo-percent
+
+[command@echo-percent-aspect]
+description = Invoke the 'echo-percent-aspect' aspect to echo a percent from a ShellAspect
+
+###################################
+# Test mapping
+[Shell@create-test-file-for-mapping]
+**yields-files=<a (t:c)> mapfile.t
+    <a (tt:c)> mapfile.tt
+command=set -x
+    touch %(RESULTS)s/mapfile.t
+    touch %(RESULTS)s/mapfile.tt
+
+[Shell@do-test-mapper]
+**maps=<a> -(1-1)-> <x (z:y)> anewfile.{~~ext~~}.z
+env=yourenv
+command=set -xeu
+    for map in $_MAPPING
+    do
+        for from in $(_froms $map)
+        do
+            for to in $(_tos $map)
+            do
+                cp $from $to
+            done
+        done
+    done
+    [[ "$yyy" == "YYY" ]]
+
+[Shell@assert-mapped-file-exists]
+command=set -eux
+    cat %(RESULTS)s/anewfile.t.z
+    cat %(RESULTS)s/anewfile.tt.z
+
+[Shell@delete-test-files]
+command=set -x
+    rm -rf %(RESULTS)s/mapfile.t* %(RESULTS)s/anewfile.*.z
+
+[command@test-mapper]
+description = Test the mapper
+0000=create-test-file-for-mapping
+1000=do-test-mapper, assert-mapped-file-exists
+2000=delete-test-files
+
+[Shell@bad-map-but-not-phase]
+**maps=<z> -(1-1)-> fictional.character
+command(blasted)=echo This won\'t happen
+
+[command@test-map-in-different-phase]
+**files=<z (z:z)> test-shell.csmake
+description=Test that file mapping is unchecked properly
+0000=bad-map-but-not-phase
+
+######################################
+# Test line-pad
+[Shell@test-python-with-linepad]
+exec=/usr/bin/python
+line-pad=**
+command=
+ **import sys
+ **
+ **for x in range(1,10):
+ **    sys.stdout.write("%%s  " %% x)
+ **print
+
+[command@test-basic-linepad]
+description=Test that the linepad works correctly
+0000=test-python-with-linepad
+
+[Shell@multiphase-shell]
+command(build,test,  blah   )=echo "Yes"
+command-clean(   clean  ,  mean,blahblah,fightintest)= echo "Clean!"
+command-no-verify(noverify,this,section)= echo "No Verify"
+
+[command@test-multiphase]
+description=Test the ability to use multiple phases in a single section
+0000=multiphase-shell
+
+[ShellEnv@myenv]
+aaa=AAA
+bbb=BBB
+
+[ShellEnv@yourenv]
+yyy=YYY
+zzz=ZZZ
+
+[command@test-shellenv]
+description=Run a shell with an environment
+0000=enviroshell
+
+[Shell@enviroshell]
+#Should this pass with delete-test-files???  it logs the error...
+env=myenv, yourenv, delete-test-files
+command=set -eux
+    [[ "$aaa" == "AAA" ]]
+    [[ "$bbb" == "BBB" ]]
+    [[ "$yyy" == "YYY" ]]
+    [[ "$zzz" == "ZZZ" ]]
+

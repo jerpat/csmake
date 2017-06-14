@@ -1,0 +1,6 @@
+How to build the csmake package:
+./csmake clean package
+
+see:
+./csmake --list-phases
+for more help

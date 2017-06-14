@@ -1,0 +1,705 @@
+.\"# <copyright>
+.\"# (c) Copyright 2017 Hewlett Packard Enterprise Development LP
+.\"#
+.\"# This program is free software: you can redistribute it and/or modify it
+.\"# under the terms of the GNU General Public License as published by the
+.\"# Free Software Foundation, either version 3 of the License, or (at your
+.\"# option) any later version.
+.\"#
+.\"# This program is distributed in the hope that it will be useful,
+.\"# but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\"# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+.\"# Public License for more details.
+.\"#
+.\"# You should have received a copy of the GNU General Public License
+.\"# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+.\"# </copyright>
+
+.\" Process this file with
+.\" groff -man -Tascii csmake.1.roff
+.\"
+
+.TH csmake 1 "DECEMBER 2016" "HPE Helion" "User Manuals"
+.SH NAME
+csmake - A specification-based build scripting tool
+         (completely specified make)
+.SH SYNOPSIS
+.B csmake [Options] [Methods]
+.SH DESCRIPTION
+.B csmake
+executes a build phase or series of phases on a given command (or "default")
+from a supplied build specification file (default: ./csmakefile).
+
+The csmakefile specifications (csmake files) are high-level descriptions
+of build processes apropos to the project.
+
+The specifications are case-sensitive python "ini" style files where each
+section specifies an action and a set of inputs to that action.
+See csmakefile (5)
+
+The different sections of the csmakefile
+define the build configuration that csmake will execute, similar to the
+way any other standard ini configuration file works.
+A csmakefile section heading calls out a build module (a "CsmakeModule") and
+creates an id that refers to that section.  Like this:
+
+.EX
+    [MyBuildModule@my-id]
+.EE
+
+.P
+This section header denotes that the section will use the 'MyBuildModule'
+CsmakeModule to accomplish the step defined by the section.  'my-id' is
+an identifier that other sections may refer to this section.  If it's helpful,
+the section header could be read like, "an instance of the type (or module)
+ 'MyBuildModule' put at (or referred to) by 'my-id'".
+
+Here is an example of a full csmakefile section:
+
+.EX
+     [ABuildStep@my-build-step]
+     option-a= This is an option (parameter)
+     option-b= This is another option
+.EE
+
+.P
+This section uses a module called ABuildStep (which is a python class
+named ABuildStep in a file called ABuildStep.py).
+
+"my-build-step" is an identifier for the section that can be used in other
+sections to refer to this section.  For example:
+
+.EX
+     [AnotherBuildStep@this-is-a-build-step]
+     build-step-child=my-build-step
+.EE
+
+.P
+"my-build-step" here refers to the ABuildStep section, above, if
+"AnotherBuildStep" is expecting an option (parameter) that refers
+to another section called "build-step-child".
+
+Observe that csmake modules define what options they will take and what
+the options mean.  So, for this example
+AnotherBuildStep's implementation would be defined to accept an option
+called 'build-step-child' that takes a reference to another build section.
+
+Modules are writen in python and can be packaged as libraries which are
+delivered in a similar fashion to python libraries
+or modules can be specific to a build.  Modules specific to the build can
+be defined in a ./CsmakeModules directory.  Assuming that "ABuildStep" and
+"AnotherBuildStep" are local modules specific to the build, doing an ls
+in the build's directory would give (among other things), a CsmakeModules
+directory, and an ls of the CsmakeModules directory would give at least
+a listing of ABuildStep.py and AnotherBuildStep.py.
+
+.SH OPTIONS
+
+.EX
+     /usr/bin/csmake [Options] [Phases]
+
+--command: Specifies the command(s) to run from the csmakefile
+--configuration: Specifies configuration file(s) to use
+--csmakefile: Synonym for --makefile
+--debug: Tells csmake to log build debugging information
+--dev-output: Tells the script to output csmake/module developer output
+--help: Displays the short help text and usage
+--help-all: Show *all* help - very, very verbose
+--help-long: Displays the long help text and usage
+--keep-going: Keep going even if a build step fails
+--list-commands: Displays all available commands
+--list-phases: Displays valid phase and sequence information
+--list-type: Displays help for the given module (section type) name
+--list-types: Displays all available section types
+--log: Sends all logging to specified file, None == stdout
+--makefile: Point csmake at a specific csmakefile
+--modules-path: Changes the csmake module search path
+--no-chatter: Tells csmake to supress all the banner output.
+--phase: Specifies the phase(s) to run
+--quiet: Supress all csmake logging and chatter
+--replay: (experimental)
+--results-dir: Directory to place build results
+--settings: (experimental)
+--verbose: Tells csmake to be verbose
+--version: Displays the version of csmake - does not proceed to build
+--working-dir: Source directory - this is '.' by default
+.EE
+
+.SH OPTION DETAILS
+
+.EX
+--command=None : 
+    Specifies the name of a 'command@' section to build
+       If not specified, it will build, [command@] 
+          or else [command@default] 
+          or else a command@ section will be picked and executed.
+
+       A "multicommand" can be specified for --command using ',' and '&' 
+       A comma ',' denotes linear execution and ampersand '&' 
+       denotes the ability to do the step in parallel.
+       I.e., --command="this, that & other" 
+         will do 'this' followed by 'that' and 'other' in parallel
+         for each phase given
+       NOTE: Use of a "multicommand" does two potentially unexpected
+             behaviors.  It will create and execute a 'command' section
+             called [command@~~multicommand~~].  It will also
+             not be restricted to running only 'command' sections.
+             This allows for, for example, an environment to be specified
+             before executing a command:
+                 --command="myenv, dostuff" 
+--configuration=None : 
+    Specifies one or more configuration files (comma separated)
+       to read from.  Configurations are ini files where the options
+       are the command-line flags and the values are the desired defaults.
+       All definitions go under the section 'settings', e.g.:
+       [settings]
+       makefile=mycsmakefile.csmake
+
+    Files will be read and applied in this order:
+        ${HOME}/.csmake.conf
+        ./.csmake.conf
+        <configuration-files> (left to right, if specified)
+
+    NOTE: Use only with extreme caution! 
+          Configuration files change the default command-line behavior
+--csmakefile=./csmakefile : 
+    Synonym for --makefile.
+       NOTE: If both --csmakefile and --makefile are specified, 
+             --makefile is used and --csmakefile is ignored
+--debug : 
+    Tells csmake to log build debugging information
+--dev-output : 
+    Tells the script to output csmake/module developer output
+--help : 
+    Displays the short help text and usage
+--help-all : 
+    Displays the help text, phases, commands, and available types
+       NOTE: Output depends on the current working directory, the
+             values of --makefile and --modules-path
+       ALSO NOTE: The output is extremely verbose
+--help-long : 
+    Displays the long help text and usage
+--keep-going : 
+    The build will, by default, end when there is an error.
+       This flag will tell csmake to keep going even if there are errors
+--list-commands : 
+    Displays all of the available commands
+
+       The output will vary based on current working directory and/or
+       the value of --makefile, and the [command@...] sections in
+       that makefile
+--list-phases : 
+    Displays valid phase and phase sequence information
+
+       The output will vary based on current working directory and/or
+       the value of --makefile, and the [~~phases~~] section in that
+       makefile
+--list-type=None : 
+    Displays help for the given module (section type) name
+--list-types : 
+    Displays all of the available section types (modules)
+
+       The output will vary based on current working directory 
+       and the value of --modules-path
+--log=None : 
+    Sends all logging to specified file, None == stdout
+--makefile=./csmakefile : 
+    Points to a csmake build specification, default is ./csmakefile
+
+       It is possible to supply a list of specifications
+         as a comma-delimited list.
+       e.g., --makefile="a.csmake, b.csmake, c.csmake"
+
+       This will process the files in order and the result will
+       be a conglomeration of all the files as if they were one
+       contiguous file.
+
+       NOTE: repeated sections will override earlier sections without
+             warning.
+--modules-path=+local:+path : 
+    Tells the build where to look for Csmake Module Extensions
+
+       Sections specify a type and an id, like [type@id].
+       When a section is invoked, it is dispatched
+       to a python class named CsmakeModules.'type'.  
+       --modules-path controls the paths python will use to attempt to
+       resolve this class.
+
+       This option is a colon-delimited list of directories to search.
+       The directories are expected to each contain a CsmakeModules
+       subdirectory.
+
+       csmake Modules are expected to be named 'type'.py and have a class
+       defined called 'type', e.g., for a section
+       [GitDependent@partnerbits], csmake will load GitDependent.py
+       and expects to find a class named GitDependent.
+
+       csmake will create an instance and provide all the options of the
+       section as a dictionary to the instance's method named
+       after the phase executing.  For example: csmake clean
+       would cause the method "clean" to be dispatched to an instance
+       of the module.  The default method "default" will be dispatched, 
+       if the module's instance does not have the specified method 
+       defined.  "default" will also be dispatched if a phase is not
+       provided on the command-line and a **default phase sequence is not
+       defined in the [~~phases~~] section in the csmakefile.
+       
+       Finally, if +local is specified, it will use the current working
+       directory, and if +path is specified, it will use the
+       PYTHONPATH, e.g., /path/to/modules:+path:/another:+local
+       will search '/path/to/modules' then PYTHONPATH, then 'another',
+       then the current working directory.  For old school unix hacks
+       starting this option with colon will have the expected behavior
+       of +local:+path:<specified option>
+
+       NOTE: This should be used with caution.  If +path is not
+             listed in the list of paths, the core csmake library
+             will not be utilized (meaning things like command and metadata
+             will not have standard definitions)
+--no-chatter : 
+    Tells csmake to supress all the banner output.
+--phase=None : 
+    Specifies the phase that will be dispatched to the modules
+       for each command.  Overrides any [Phases] given on the command
+       line.  By default, the command line arguments are used.
+       If no --phase or command line arguments are given, The "**default"
+       specified in the [~~phases~~] section is executed.  If there
+       is no **default option defined, then, literally, "default" is
+       the phase used.
+--quiet : 
+    Tells csmake to supress all logging output on stdout.
+       All output from build steps will still appear
+--replay=None : 
+    Specifies a file to write out the executable replay makefile
+       ~~~EXPERIMENTAL, INCOMPLETE~~~
+--results-dir=./target : 
+    Directory to place results - if a relative path is specified
+       it will be based on whatever is defined in --working-dir.
+
+       The csmake environment variable 'RESULTS' will hold this value.
+--settings=None : 
+    (experimental) JSON specification of settings to avoid using manifold flags
+--verbose : 
+    Tells csmake to be verbose
+--version : 
+    Displays the version of csmake - does not proceed to build
+--working-dir=. : 
+    Directory to read sources from - the current
+       working directory of the csmake execution will move to this 
+       directory until execution completes.
+
+       The csmake environment variable 'WORKING' will hold this value.
+
+       NOTE: This does not effect the current working directory of the
+             --configuration option.
+.EE
+
+.SH COMMANDS
+Similar to make, csmake allows the build specification to define the entry
+points, i.e., commands, for the build.  Unlike make, these commands are
+called out specifically as "command" sections in the csmakefile, for example,
+a csmakefile may contain a section like:
+
+.EX
+    [command@do-a-build]
+    description=This will do a full build
+    05=get-library-parts, get-library-third-party-dependencies
+    10=execute-gcc
+    20=execute-linker
+    30=package-library
+.EE 
+
+.P
+This section, 'do-a-build', creates a command that can be executed from
+the command line, e.g.:
+
+.EX
+    csmake --command=do-a-build
+.EE
+
+.P
+When a "command" section executes, it executes the sections
+listed in the options in alpha-numeric order of the keys (a disadvantage of
+the ini format is there is no implied ordering of the file).
+For more information use the --list-type feature of csmake
+for the command module:
+
+.HP 4
+csmake --list-type=command
+
+.P
+You can also ask csmake to tell you all the commands that you can execute from
+the csmakefile, like:
+
+.HP 4
+csmake --list-commands
+
+.P
+This would provide the list of all the command sections defined in the
+csmakefile specification along with all the descriptions provided by each.
+
+Alternatively, if you have a build specifcation called "mybuild.csmake",
+the commands could be listed like:
+
+.HP 4
+csmake --list-commands --makefile=mybuild.csmake
+
+.P
+csmake allows a default command called
+"default" which can be created with a section in the csmakefile called
+"command@default".  csmake will also allow the shorthand "command@" to be
+used to specify the default command.
+
+.EX
+    [command@default]
+    description=Do the whole build
+.EE
+
+.SH PHASES
+
+A "phase" is a full, atomic build process that runs the requested build
+specification all the way through.  Modules will (or should) respond
+appropriately to different phases.
+
+Typical phases include:
+
+.EX
+default     Do the default behavior for each module in the specification
+build       Do the step to build the component
+clean       Clean the component
+test        Execute testing
+package     Create a deliverable package
+install     Install the package
+.EE
+
+.P
+Other phases are possible, these are just typical.  The valid phases of a build
+may be documented in the csmakefile in a special [~~phases~~] section.
+For more information read the csmakefile(5) man page, or:
+
+.HP 4
+csmake --list-type=~~phases~~
+
+.P
+Phases are executed in csmake by simply calling them out on the command line
+after any flags.  For example:
+
+.HP 4
+csmake --command=my-command build test package
+
+.P
+This would run the "my-command" command through the "build", "test",
+and "package" phases.
+
+Alternatively, phases may be specified using a flag, similar to "command":
+
+.HP 4
+csmake --command=my-command --phase="build, test, package"
+
+.P
+The phase name is the method name dispatched to each module specified
+in a csmakefile.  For example, in a csmake module implementation, you
+would write:
+.EX
+      #---Defining a phase method---
+      def build(self, options):
+          self.log.info("I'm doing a build phase")
+
+      def clean(self, options):
+          self.log.info("I'm doing a clean phase")
+.EE
+
+.P
+For an Aspect module (see ASPECTS, below), the method names may or may not
+be tied to phases.
+Aspects are woven in to module execution paths along defined joinpoints,
+like "starting" or "failed" or "exception".  The joinpoint definitions
+may specify what phase they will weave in for the joinpoint.
+For this example, we have an aspect module implementation that will handle
+section exection failures ("failed") for any phase and section exection
+successes ("passed") for only the "build" phase:
+
+.EX
+      #---defining an aspect module---
+      def failed(<aspect joinpoint parameters>):
+          ...
+
+      def passed__build(<aspect joinpoint parameters>):
+          ...
+.EE
+
+.P
+Here, when the aspect's woven section is executed and fails, the "failed"
+method in the aspect module will be called regardless of the current phase,
+but if the section passes, the "passed__build" method will only be called
+if executing a build phase.
+
+.SH ASPECTS and JOINPOINT and FLOW CONTROL ADVICE
+
+csmake provides a mechanism for other modules to weave their code into
+the execution path of regular modules called "aspects" (review Aspect-Oriented
+Programming concepts for more insight into Aspects).
+
+The default joinpoints advised by the csmake run time are:
+.IP avoided
+Given when a step is avoided due to automatic build avoidance ~~FUTURE~~
+.IP start
+Given at the start of executing any section
+.IP passed
+Given when the execution of the section passes
+.IP failed
+Given with the execution of the section fails
+.IP exception
+Given when the execution of the section causes an exception to occur
+.IP end
+Given when the section completes execution
+
+.IP
+Modules may provide other custom joinpoints.
+
+Along with the joinpoint advice, aspects are allowed to participate
+in control of the flow of execution through the use of "flow control
+issues" - a kind of "flow advice" back
+to the system telling csmake what to do next with the section.
+
+The default flow control advice issues is:
+.IP doNotAvoid
+Advises csmake to not avoid a section it intends to avoid
+.IP doNotStart
+Advises csmake to not start the section
+(checked after start is advised)
+.IP tryAgain
+Advises csmake to do a section again
+(checked after passed, failed, and exeception are advised, but before end)
+
+.P
+Aspects cast votes on the flow control issues and also may dictate how to
+count the votes, as it were.
+Some aspects may have strong opinions about the flow control.  I.e., "you
+must not execute the step".  Others may just vote along with others and a
+majority of the aspects voting decide the outcome of the flow.
+
+The purpose of allowing the voting is to allow decoupled coordination
+of the flow control from several aspects that may come and go from the
+build specification as the specification is maintained.
+
+Modules may, as with custom joinpoints, provide other flow control issues.
+
+.SH EXAMPLES
+
+.HP 4
+csmake
+
+Invokes the default command and the default phase or sequence of phases as
+defined in the '**default' option in a csmakefile ~~phases~~ section.
+If there is no ~~phases~~ section or the section does not have a '**default'
+defined, then a phase named 'default' is executed.
+
+Using the default makefile, ./csmakefile
+
+This command will only print WARNING and ERROR messages along with the
+"flow chatter" which documents the progress of csmake through the given
+specification.
+
+.HP 4
+csmake --debug --command=crank-it-out --makefile=my.csmake build
+
+Invokes the "build" phase
+
+Using the "crank-it-out" command
+
+Using the ./my.csmake makefile
+
+Printing DEBUG, INFO, EXCEPTION, WARNING, and ERROR messages with the
+ "flow chatter"
+
+.HP 4
+csmake --dev-output --quiet --command=xyzzy build test
+
+Invokes the 'xyzzy' command against the build phase, then the test phase
+
+This command will use the default makefile, ./csmakefile
+
+Printing developer output (useful if developing csmake or a new csmake module)
+but without the build flow output or logging output (which is useful to see
+the code execution path of csmake through the modules - this combination can
+help find problems with modules that aren't executing)
+
+.HP 4
+csmake --makefile=tt.csmake --modules-path=/usr/lib/special-builds:+path:+local --help-all
+
+Invokes the full help output which is, the usage (--help), the modules
+ (--list-types), the commands (--list-commands), and the defined phases 
+ (--list-phases) defined in the makefile, ./tt.csmake.
+
+This will usually give you a lot to wade through, but can be very helpful
+for seeing everything a particular command-line configuration would have
+to offer.  You may find it beneficial to pipe the output to 'less' or to
+a file as a rough user's guide or README for building. 
+
+ --modules-path in this command will change the --list-type output as it may
+pull in different or new modules along the path specification.  The csmakefile
+used will define the commands and the valid phases for the build, so, when
+ --makefile=tt.csmake is used, --list-commands and --list-phases will reflect
+the information contained in the ./tt.csmake file versus some other file like
+  ./csmakefile.
+
+
+.SH SEE ALSO
+
+csmakefile(5) CsmakeModules(5) PYTHON(1)
+
+.EX
+ConfigParser
+    https://docs.python.org/2/library/configparser.html
+.EE
+
+
+.SH COPYRIGHT
+
+csmake is Copyright 2014-2016 Hewlett Packard Enterprise Development
+Company, L.P.
+All Rights Reserved
+
+
+.SH APPENDIX: MOTIVATION AND THEORY OF OPERATION
+Most build tools are centered around the idea of delivering one or a
+handful of results based around a single tool or development path.
+Many of the steps required to achieve the desired results in these
+environments are hard-coded or done intrinsically (make, ant, maven, etc.).
+
+While many of these tools claim to be general-purpose (any tool can be made
+to work for your job.  Sure, you can hammer in a nail with a screwdriver),
+they tend to become cumbersome to use and source files difficult to
+maintain.  make and scons builds C/C++ files, maven and ant build Java, for
+example.  All of these tools have been used, and even successfully used,
+for projects outside of the scope of their sweet spots.  However, what the
+developer will often find is, the farther away one gets from the intended
+purpose of these tools, the more difficult the job of using the tool becomes
+and the more difficult it becomes, in some cases, to predict what the tool
+will actually do.  In other words, as the complexity of the required build
+specification grows, so does the ability to grasp what will actually happen.
+Worse, in some cases, you end up doing more work and the results end up
+more opaque than if you had simply wrote a shell script or small
+utility program to do the job of codifying the build process.
+This is where csmake departs from the standard software build tools in the
+author's opinion.
+
+For csmake, the goal is simply to provide a way to catalog and instantiate
+python classes that will execute the requirements of the build tasks at hand.
+Thus, csmake provides a build development framework where developers can
+draw from standard and custom building blocks in python to accomplish
+and complete building software projects.
+
+    So....(might say the reader) You're telling me that I have to write my
+build process all in python and then also write a file that will drive
+all my python?  That sounds preposterous!
+
+ ...In a way it is.  Writing a singluar shell
+or python script or ... script from scratch with no framework that handles
+some of the basic things one would want to have when building their
+project does have appeal - it could be quick to write and maintain
+(arguable) such a script.  Does your script nicely port to a second project
+that is similar to your first one?  Does your script allow you to
+easily add a new step in the middle of all the previous steps?  Or
+for that matter, can you figure out where one step ends and the next
+one begins?  If you start building these capabilities into your scripts
+are you rebuilding csmake from scratch?  The author claims that, in fact,
+probably you are.
+
+I think it is possible to claim that builds (especially very complex builds)
+driven by csmake are easier to maintain and use by other developers.
+However, recall Edsger W. Dijkstra's famous quote, "There is not now,
+nor has there ever been, nor will there ever be, any programming language in
+which it is the least bit difficult to write bad code."
+
+It is definitely possible to make a giant mess out of a csmake specification.
+csmake is, for all intents and purposes, an extensible, declarative programming
+language.  You, for example, could introduce branching and for loops.
+You could introduce opaque and unpredictible default behaviors.
+The key is, however, you have to go out of your way to do that...you
+don't get that for free.
+
+In essence, there are really three aspects to csmake that make it useful
+(in the opinion of the author) for developing software build specifications.
+
+1) csmakefiles are declarative.
+   You say what you want to do and csmake does it, like SQL for example.
+   This provides the build author a way to write a formal specification
+   of what will happen.  The "what" is based on a simple type system
+   that links the type mentioned in the csmakefile to python CsmakeModule
+   class definitions that are supposed
+   to document what they expect for input from the makefile, and what
+   the module intends to do with that information.
+
+2) csmake is extensible, but limited in extensibility.
+   The simple type system requires that the underlying class
+   implements a minimal contract.  Quite simply, it has to
+   accept an environment and define methods that will respond
+   to the "phases" supplied on the command line.  The methods implementing
+   responses to the various phases are required to accept (but aren't required
+   to be happy about) anything given to it from the specification.
+
+   An ancillary point here is that this is not a new concept for
+   build tools e. g., maven.  What is new, is every possible
+   step declaration (even "command") is a module and every section
+   invoking that module has the exact same structure.  There's no
+   special predefined rules, or special set of 5 levels of nested
+   tags for a particular phase in the build.
+
+   By way of example, there is also no built-in artifact system in csmake.
+   Several different archival systems could be employed and modules written
+   depending on the needs of the project that you are building with csmake.
+
+   The good and bad of this is, you can define and redefine anything, such as
+   "command" which hazards running counter to the third aspect (below) and
+   could end up making your specification unintelligible to others
+   (like redefining a constant in an old FORTRAN program would).
+
+3) csmake steps can, but don't have to be, shared.
+   csmake allows (and actually by default will favor) local step
+   implementations.  The implication is you can write that single
+   script that only applies to your single project, and still have
+   the benefit of a framework and specification that invokes your
+   script - which, almost guaranteed, will be comprised of at least
+   two python classes.  What good is all this framework if you're
+   not designing your build to be reused?  One word: maintenance.
+   And, really, if you've come up with a module that is a
+   well-defined step in building your deliverable, unless you
+   wrote your entire build tool chain and you're the only person
+   that will ever use that tool chain, there's probably someone else
+   in the world, probably someone on your team, even, that could
+   benefit from reusing that implementation.
+
+One other minor point is the python-ini configuration format is extremely
+open-ended, which lends itself to, for example specifying a shell script
+directly in the csmakefile alongside, perhaps a python subroutine
+or a list of variable names, etc.  The flexibility of the ini format
+allows one to write a rather free-flowing build description that
+adapts to or may match the underlying tools' formats.  This proves to
+be extremely handy and powerful in practice.
+
+Oh, right, on to the theory of operation.  In theory, you
+write INI-styled sections (declarations) that specify steps in a build process.
+
+These sections consist of an INI section declaration
+which contains a 'type'@'id' construct for the section label,
+e.g., [BazzarRepo@bzr-proj].  This section will contain key-value
+pairs.  The values may contain python styled dictionary 'modulus'
+substitutions, e.g., %(my-csmake-environment-key)s that will refer to the
+current csmake environment (see: csmake --list-type environment)
+
+Every section 'type', e.g., the 'BazzarRepo' part of the [BazzarRepo@bzr-proj]
+section declaration in the specification corresponds to a python class
+ (a csmake module) that is instantiated for that section and passed all the
+key-value pair inputs as a dictionary.
+
+In theory, the python class does roughly what
+the 'type' would imply based on what phase was invoked on the instance
+(said phase is determined by the last statement or statements on the
+command line for csmake).  Hopefully, most of those 'types' required
+to build the deliverable have already been written and are delivered in
+libraries, and hopefully most of your specification makes sense in one
+or two files.
+
+Finally, this section of babble needs to always be relegated to the end of the man page - fight the temptation to relocate it - yes, all the way past the 'see also' and any other such information as it's the least likely to be read or be really useful in any way other than crawling into the author's head...
