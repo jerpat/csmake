@@ -116,7 +116,7 @@ testing (i.e., promotion scripts).
 if desired with almost no configuration changes).
 The next sections go into greater details on each of the points above.
 
-##csmake Build Configurations - csmakefiles
+## csmake Build Configurations - csmakefiles
 A csmakefile is simply a csmake build configuration in a python ini format
 that calls out the various modules that will be used to perform a build.  Each
 section (except for the [~~phases~~] section) is a reference to a module
@@ -251,7 +251,7 @@ World
      End csmake - version 1.5.7
 ```
 
-##Metadata in csmake
+## Metadata in csmake
 Unless a build is constructed "just for fun", builds are created for the
 purpose of delivering some kind of "product" which could be an open source
 developer delivering their library, or a company delivering an installable
@@ -322,7 +322,7 @@ various popular packaging and delivery standards.
 The most comprehensive resource for defining metadata for your project is
 found in the module documentation for metadata:  csmake --list-type=metadata
 
-##File Tracking in csmake
+## File Tracking in csmake
 File tracking can be a significant help to anyone building.  If it's done
 well, it's easy to modify your project by adding or deleting files and have
 the build work without making changes to the build specification.  Some tools
@@ -429,18 +429,17 @@ choice...) from any group being tracked.
 
 <sub>This material is under the GPL v3 license:
 
-(c) Copyright 2017 Hewlett Packard Enterprise Development LP
+<sub>(c) Copyright 2017 Hewlett Packard Enterprise Development LP
 
-This program is free software: you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the
-Free Software Foundation, either version 3 of the License, or (at your
-option) any later version.
+<sub>This program is free software: you can redistribute it and/or modify it
+<sub>under the terms of the GNU General Public License as published by the
+<sub>Free Software Foundation, either version 3 of the License, or (at your
+<sub>option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
-Public License for more details.
+<sub>This program is distributed in the hope that it will be useful,
+<sub>but WITHOUT ANY WARRANTY; without even the implied warranty of
+<sub>MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+<sub>Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-</sub>
+<sub>You should have received a copy of the GNU General Public License
+<sub>along with this program.  If not, see <http://www.gnu.org/licenses/>.
